@@ -1,0 +1,7 @@
+fastapi==0.100.0
+hypercorn==0.14.4
+firebase-admin==6.5.0
+google-cloud-firestore==2.16.0
+python-multipart==0.0.9
+python-dotenv==1.0.0
+google-auth
