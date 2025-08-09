@@ -1,9 +1,5 @@
-import os
-import json
-from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials, firestore
 from datetime import datetime
+from .firestore_client import db
 
 '''
 나의 생각 : 조회용 및 참고용 데이터 (SQL처럼 join을 쓸 수 없을 듯해 참고용 컬렉션 작성)
@@ -16,15 +12,6 @@ allergy_codes = 알레르기 이름(코드), 설명, 사실 카테고리는 나�
 dietary_codes = 종교/식단 제한 이름(코드), 간단 설명용, 먹으면 안되는 음식(알러지코드)사용
 
 '''
-
-load_dotenv()
-# .env에서 JSON 파싱(firestore 비밀키)
-firebase_credentials = json.loads(os.getenv("FIREBASE_CREDENTIALS"))
-
-cred = credentials.Certificate(firebase_credentials)
-firebase_admin.initialize_app(cred)
-
-db = firestore.client()
 
 # 국가 데이터 -> 일부만 일단 넣어둠 (여긴 수정 고민)
 countries_data = {

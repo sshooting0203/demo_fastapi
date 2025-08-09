@@ -132,13 +132,9 @@ SEARCH_LOGS_SEED: List[Dict] = [
 ]
 
 # -----------------------------
-# Firestore 초기화
+# Firestore 클라이언트 사용
 # -----------------------------
-load_dotenv()
-firebase_credentials = json.loads(os.getenv("FIREBASE_CREDENTIALS"))
-cred = credentials.Certificate(firebase_credentials)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+from .firestore_client import db
 
 def now_utc():
     return datetime.now(timezone.utc)
