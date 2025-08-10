@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Firebase local emulator settings
+.firebaserc
+firebase.json
+
 # C extensions
 *.so
 

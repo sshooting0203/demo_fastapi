@@ -7,6 +7,8 @@ from ..db.firestore_client import firestore_client
 from datetime import datetime
 import firebase_admin
 from firebase_admin import auth
+import os
+from firebase_admin import auth as fb_auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -384,23 +386,25 @@ user_service = UserService()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
     """Firebase 토큰을 검증하고 현재 사용자 정보를 반환합니다."""
+    token = credentials.credentials
+    is_emulator = bool(os.getenv("FIREBASE_AUTH_EMULATOR_HOST"))
+
     try:
-        # Firebase 토큰 검증
-        decoded_token = auth.verify_id_token(credentials.credentials)
-        
-        # 사용자 정보 반환
+        # 에뮬레이터 토큰은 check_revoked/issuer 검사를 끄는 게 안전
+        decoded = fb_auth.verify_id_token(token, check_revoked=not is_emulator)
+
         user_info = {
-            "uid": decoded_token["uid"],
-            "email": decoded_token.get("email", ""),
-            "displayName": decoded_token.get("name", ""),
-            "emailVerified": decoded_token.get("email_verified", False)
+            "uid": decoded["uid"],
+            "email": decoded.get("email", ""),
+            "displayName": decoded.get("name", ""),
+            "emailVerified": decoded.get("email_verified", False),
         }
-        
         logger.info(f"사용자 인증 성공: {user_info['uid']}")
         return user_info
-        
+
     except Exception as e:
-        logger.error(f"사용자 인증 실패: {str(e)}")
+        # 디버깅을 위해 에뮬레이터/실서버 상태와 함께 로깅
+        logger.error(f"[auth] verify_id_token 실패 (emulator={is_emulator}): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="유효하지 않은 인증 토큰입니다.",

@@ -1,11 +1,11 @@
-from firebase_admin import firestore
+from ..db.firestore_client import firestore_client  # ✅ 래퍼 사용
 from datetime import datetime, timedelta
 from typing import List, Optional
 from ..models.ranking import CountryRanking, TopFoodSnapshot
 
 class RankingService:
     def __init__(self):
-        self.db = firestore.client()
+        self.db = firestore_client.db  # ✅ 래퍼의 db 사용
     
     async def get_top_foods(self, country: str, limit: int = 3) -> List[TopFoodSnapshot]:
         """국가별 상위 음식 조회 (MVP: 홈화면 Top 3용)"""

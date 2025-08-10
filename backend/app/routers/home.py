@@ -27,8 +27,8 @@ async def get_home_data(current_user: dict = Depends(get_current_user)):
         
         # 2. 여행국가 기반 Top 3 음식
         country_rankings = []
-        country_message = None
-        
+        country_message = "잠시 생략"
+        '''
         # 사용자의 여행국가 정보 가져오기
         travel_country_info = home_service.get_travel_country_info(uid)
         
@@ -40,7 +40,7 @@ async def get_home_data(current_user: dict = Depends(get_current_user)):
         else:
             # 여행국가 미설정 시 안내 메시지
             country_message = "여행 국가를 설정하면 해당 국가의 인기 음식을 볼 수 있습니다."
-        
+        '''
         return {
             "success": True,
             "user": user_info,

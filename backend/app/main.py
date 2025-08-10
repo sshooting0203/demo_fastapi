@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv() #위에 있어야 오류x
+
 from fastapi import FastAPI
 from .routers import home, users, search, auth
 
