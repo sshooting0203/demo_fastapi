@@ -19,12 +19,24 @@ class RankingService:
             ranking_data = ranking_doc.to_dict()
             top_foods = ranking_data.get('topFoods', [])
             
-            # 상위 N개만 반환
-            return [TopFoodSnapshot(**food) for food in top_foods[:limit]]
+            # 상위 N개만 반환하고, 누락된 필드들을 추가
+            result = []
+            for food in top_foods[:limit]:
+                # DB에서 가져온 데이터에 누락된 필드들을 추가
+                food_data = {
+                    'foodId': food.get('foodId', f"{country}_{food.get('foodName', 'unknown')}"),
+                    'country': country,  # 현재 조회하는 국가로 설정
+                    'foodName': food.get('foodName', '알 수 없는 음식'),
+                    'searchCount': food.get('searchCount', 0),
+                    'saveCount': food.get('saveCount', 0)
+                }
+                result.append(TopFoodSnapshot(**food_data))
+            
+            return result
         except Exception as e:
             print(f"랭킹 조회 오류: {str(e)}")
             return []
-    
+
     async def update_country_ranking(self, country: str, food_query: str):
         """국가별 랭킹 업데이트 (MVP: 검색 시 간단하게)"""
         try:
