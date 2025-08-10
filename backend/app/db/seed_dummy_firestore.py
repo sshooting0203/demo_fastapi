@@ -28,7 +28,7 @@ def seed_dummy_data():
                 "uid": "user_001",
                 "displayName": "백산수님",
                 "email": "test1@example.com",
-                "allergies": ["EGG", "SHRIMP"],  # allergy_codes와 일치
+                "allergies": ["EGG", "SHRIMP"],  # allergens와 일치
                 "dietaryRestrictions": ["VEGETARIAN"],  # dietary_codes와 일치
                 "currentCountry": "JP",
                 "createdAt": datetime.now() - timedelta(days=30),
@@ -76,13 +76,13 @@ def seed_dummy_data():
                     "foodName": "돈카츠",
                     "dishName": "とんかつ",
                     "country": "JP",
-                    "summary": "돈카츠는 돼지고기를 빵가루를 묻혀 튀긴 일본의 대표적인 요리입니다.",
+                    "summary": "돼지고기에 빵가루를 입혀 바삭하게 튀긴 일본의 대표 요리입니다.",
                     "recommendations": ["고기 좋아하는 사람", "튀김 요리 선호자"],
                     "ingredients": ["돼지고기", "빵가루", "계란", "밀가루"],
-                    "allergens": ["WHEAT", "EGG"],  # allergy_codes와 일치
-                    "imageUrl": "https://example.com/tonkatsu.jpg",
-                    "imageSource": "일본 요리 사진",
-                    "culturalBackground": "일본 메이지 시대에 서양의 커틀릿을 참고하여 만들어진 요리입니다."
+                    "allergens": ["PORK", "EGG", "WHEAT"],
+                    "imageUrl": "https://picsum.photos/seed/food_JP_tonkatsu/800/500",
+                    "imageSource": "일본 가정식 사진",
+                    "culturalBackground": "서양 커틀릿의 영향을 받아 일본식으로 발전했습니다."
                 }
             },
             {
@@ -91,13 +91,13 @@ def seed_dummy_data():
                     "foodName": "라멘",
                     "dishName": "ラーメン",
                     "country": "JP",
-                    "summary": "라멘은 일본의 대표적인 면 요리로, 다양한 스프와 토핑으로 구성됩니다.",
-                    "recommendations": ["면 요리 애호가", "따뜻한 국물 요리 선호자"],
-                    "ingredients": ["면", "돼지뼈 스프", "차슈", "계란", "김"],
-                    "allergens": ["WHEAT", "EGG"],  # allergy_codes와 일치
-                    "imageUrl": "https://example.com/ramen.jpg",
-                    "imageSource": "일본 라멘 사진",
-                    "culturalBackground": "중국에서 유래했지만 일본에서 독자적으로 발전한 요리입니다."
+                    "summary": "육수와 밀면, 토핑이 조화를 이루는 일본 면 요리입니다.",
+                    "recommendations": ["면 요리 애호가", "따뜻한 국물 선호자"],
+                    "ingredients": ["밀면", "육수", "차슈", "계란", "파"],
+                    "allergens": ["WHEAT", "EGG", "SOY", "PORK"],
+                    "imageUrl": "https://picsum.photos/seed/food_JP_ramen/800/500",
+                    "imageSource": "라멘 전문점 사진",
+                    "culturalBackground": "중국 면 요리에서 파생되어 일본에서 독자적으로 발전했습니다."
                 }
             },
             {
@@ -106,13 +106,28 @@ def seed_dummy_data():
                     "foodName": "비빔밥",
                     "dishName": "비빔밥",
                     "country": "KR",
-                    "summary": "비빔밥은 한국의 대표적인 한식으로, 다양한 채소와 고기를 밥과 함께 비벼 먹는 요리입니다.",
-                    "recommendations": ["건강한 식사 선호자", "채소 요리 애호가"],
-                    "ingredients": ["밥", "당근", "오이", "시금치", "고기", "고추장"],
-                    "allergens": ["TOMATO"],  # allergy_codes와 일치 (고추장에 토마토 성분)
-                    "imageUrl": "https://example.com/bibimbap.jpg",
-                    "imageSource": "한국 비빔밥 사진",
-                    "culturalBackground": "조선시대 궁중 요리에서 유래했으며, 제철 음식을 한 그릇에 담아 먹는 지혜로운 요리입니다."
+                    "summary": "밥과 나물, 고추장, 계란 등을 비벼 먹는 한국 대표 한식입니다.",
+                    "recommendations": ["채소 위주 식단", "한식 애호가"],
+                    "ingredients": ["밥", "나물", "고추장", "계란", "참기름"],
+                    "allergens": ["EGG", "SOY"],
+                    "imageUrl": "https://picsum.photos/seed/food_KR_bibimbap/800/500",
+                    "imageSource": "한식당 사진",
+                    "culturalBackground": "지역마다 재료가 다르고 전주비빔밥이 특히 유명합니다."
+                }
+            },
+            {
+                "foodId": "KR_tteokbokki",
+                "foodInfo": {
+                    "foodName": "떡볶이",
+                    "dishName": "떡볶이",
+                    "country": "KR",
+                    "summary": "쌀떡을 매콤달콤한 고추장 소스로 볶아낸 길거리 간식입니다.",
+                    "recommendations": ["매운맛 선호자", "간식 선호자"],
+                    "ingredients": ["쌀떡", "고추장", "어묵", "대파"],
+                    "allergens": ["SOY", "WHEAT"],
+                    "imageUrl": "https://picsum.photos/seed/food_KR_tteokbokki/800/500",
+                    "imageSource": "분식집 사진",
+                    "culturalBackground": "대한민국 전역에서 사랑받는 대표적 분식 메뉴입니다."
                 }
             },
             {
@@ -121,13 +136,148 @@ def seed_dummy_data():
                     "foodName": "치즈버거",
                     "dishName": "Cheeseburger",
                     "country": "US",
-                    "summary": "치즈버거는 미국의 대표적인 패스트푸드로, 빵, 패티, 치즈, 채소로 구성됩니다.",
-                    "recommendations": ["패스트푸드 애호가", "고기 요리 선호자"],
-                    "ingredients": ["번", "소고기 패티", "치즈", "양상추", "토마토", "양파"],
-                    "allergens": ["WHEAT", "MILK"],  # allergy_codes와 일치
-                    "imageUrl": "https://example.com/burger.jpg",
-                    "imageSource": "미국 버거 사진",
-                    "culturalBackground": "20세기 초 미국에서 시작된 패스트푸드 문화의 상징적인 요리입니다."
+                    "summary": "번 사이에 소고기 패티와 치즈, 채소를 넣어 먹는 미국 대표 메뉴입니다.",
+                    "recommendations": ["패스트푸드 선호자", "단백질 보충"],
+                    "ingredients": ["번", "소고기 패티", "치즈", "양상추", "토마토"],
+                    "allergens": ["WHEAT", "BEEF", "MILK", "TOMATO"],
+                    "imageUrl": "https://picsum.photos/seed/food_US_burger/800/500",
+                    "imageSource": "미국 패스트푸드 사진",
+                    "culturalBackground": "20세기 미국에서 대중화되며 전 세계로 퍼졌습니다."
+                }
+            },
+            {
+                "foodId": "US_pizza",
+                "foodInfo": {
+                    "foodName": "피자",
+                    "dishName": "Pizza",
+                    "country": "US",
+                    "summary": "토마토 소스와 치즈, 다양한 토핑을 올려 구운 음식입니다.",
+                    "recommendations": ["파티 음식", "치즈 애호가"],
+                    "ingredients": ["밀가루 도우", "토마토 소스", "치즈", "페퍼로니"],
+                    "allergens": ["WHEAT", "MILK", "TOMATO"],
+                    "imageUrl": "https://picsum.photos/seed/food_US_pizza/800/500",
+                    "imageSource": "뉴욕 스타일 피자 사진",
+                    "culturalBackground": "이탈리아에서 유래했으나 미국식 스타일로 크게 확장되었습니다."
+                }
+            },
+            {
+                "foodId": "CN_kungpao",
+                "foodInfo": {
+                    "foodName": "궁보계정",
+                    "dishName": "宫保鸡丁",
+                    "country": "CN",
+                    "summary": "닭고기와 땅콩을 매콤달콤하게 볶은 사천 요리입니다.",
+                    "recommendations": ["중식 애호가", "매콤달콤한 맛 선호"],
+                    "ingredients": ["닭고기", "땅콩", "말린 고추", "간장"],
+                    "allergens": ["CHICKEN", "PEANUT", "SOY"],
+                    "imageUrl": "https://picsum.photos/seed/food_CN_kungpao/800/500",
+                    "imageSource": "중국 사천요리 사진",
+                    "culturalBackground": "칭 왕조 관리였던 궁보의 이름에서 유래했다는 설이 있습니다."
+                }
+            },
+            {
+                "foodId": "CN_xiaolongbao",
+                "foodInfo": {
+                    "foodName": "샤오롱바오",
+                    "dishName": "小笼包",
+                    "country": "CN",
+                    "summary": "얇은 피에 육즙 가득한 속을 넣어 찐 딤섬입니다.",
+                    "recommendations": ["딤섬 애호가", "국물 만두 선호"],
+                    "ingredients": ["밀가루 피", "돼지고기 속", "육수 젤리"],
+                    "allergens": ["WHEAT", "PORK"],
+                    "imageUrl": "https://picsum.photos/seed/food_CN_xiaolongbao/800/500",
+                    "imageSource": "상하이 딤섬 사진",
+                    "culturalBackground": "상하이 지역에서 특히 유명한 대표 딤섬입니다."
+                }
+            },
+            {
+                "foodId": "TH_padthai",
+                "foodInfo": {
+                    "foodName": "팟타이",
+                    "dishName": "ผัดไทย",
+                    "country": "TH",
+                    "summary": "볶음쌀국수에 새우, 두부, 숙주 등을 넣어 만든 태국 요리입니다.",
+                    "recommendations": ["면 요리 선호자", "아시아 음식 애호가"],
+                    "ingredients": ["쌀국수", "새우", "두부", "숙주", "땅콩"],
+                    "allergens": ["PEANUT", "SOY", "SHRIMP"],
+                    "imageUrl": "https://picsum.photos/seed/food_TH_padthai/800/500",
+                    "imageSource": "태국 길거리 음식 사진",
+                    "culturalBackground": "국가 주도의 식문화 캠페인으로 대중화되었다고 알려져 있습니다."
+                }
+            },
+            {
+                "foodId": "VN_pho",
+                "foodInfo": {
+                    "foodName": "퍼(쌀국수)",
+                    "dishName": "Phở",
+                    "country": "VN",
+                    "summary": "향신료가 들어간 맑은 육수와 쌀국수가 특징인 베트남 국수입니다.",
+                    "recommendations": ["가벼운 국물 선호", "아침 식사"],
+                    "ingredients": ["쌀국수", "소고기/닭고기 육수", "허브", "라임"],
+                    "allergens": ["BEEF"],
+                    "imageUrl": "https://picsum.photos/seed/food_VN_pho/800/500",
+                    "imageSource": "하노이 길거리 식당 사진",
+                    "culturalBackground": "북부와 남부 스타일이 다르게 발전했습니다."
+                }
+            },
+            {
+                "foodId": "ES_paella",
+                "foodInfo": {
+                    "foodName": "파에야",
+                    "dishName": "Paella",
+                    "country": "ES",
+                    "summary": "사프란 향이 나는 쌀요리에 해산물 또는 고기를 넣어 지은 스페인 요리입니다.",
+                    "recommendations": ["해산물 애호가", "파티용 대접 요리"],
+                    "ingredients": ["쌀", "사프란", "해산물", "올리브 오일"],
+                    "allergens": ["SHELLFISH", "SHRIMP"],
+                    "imageUrl": "https://picsum.photos/seed/food_ES_paella/800/500",
+                    "imageSource": "발렌시아 전통 요리 사진",
+                    "culturalBackground": "발렌시아 지방에서 시작된 축제 음식입니다."
+                }
+            },
+            {
+                "foodId": "IT_carbonara",
+                "foodInfo": {
+                    "foodName": "카르보나라",
+                    "dishName": "Carbonara",
+                    "country": "IT",
+                    "summary": "계란과 치즈, 판체타로 만드는 로마식 파스타입니다.",
+                    "recommendations": ["크리미 파스타 선호", "이탈리아 음식 애호가"],
+                    "ingredients": ["파스타", "계란", "치즈", "판체타", "후추"],
+                    "allergens": ["WHEAT", "EGG", "MILK", "PORK"],
+                    "imageUrl": "https://picsum.photos/seed/food_IT_carbonara/800/500",
+                    "imageSource": "로마 가정식 사진",
+                    "culturalBackground": "전통적으로 생크림 없이 계란과 치즈로만 만듭니다."
+                }
+            },
+            {
+                "foodId": "FR_crepe",
+                "foodInfo": {
+                    "foodName": "크레페",
+                    "dishName": "Crêpe",
+                    "country": "FR",
+                    "summary": "얇게 부친 프랑스식 팬케이크로 달콤·짭짤 토핑 모두 어울립니다.",
+                    "recommendations": ["디저트 애호가", "브런치 선호"],
+                    "ingredients": ["밀가루", "우유", "계란", "버터"],
+                    "allergens": ["WHEAT", "MILK", "EGG"],
+                    "imageUrl": "https://picsum.photos/seed/food_FR_crepe/800/500",
+                    "imageSource": "파리 카페 사진",
+                    "culturalBackground": "브르타뉴 지역의 갈레트와 함께 유명합니다."
+                }
+            },
+            {
+                "foodId": "MX_tacosalpastor",
+                "foodInfo": {
+                    "foodName": "타코 알 파스토르",
+                    "dishName": "Tacos al Pastor",
+                    "country": "MX",
+                    "summary": "아도보로 양념한 돼지고기를 회전구이해 얇게 썰어 넣는 멕시코 타코입니다.",
+                    "recommendations": ["길거리 음식 애호가", "매콤한 맛 선호"],
+                    "ingredients": ["옥수수 또르띠야", "돼지고기", "파인애플", "양파", "고추"],
+                    "allergens": ["PORK"],
+                    "imageUrl": "https://picsum.photos/seed/food_MX_alpastor/800/500",
+                    "imageSource": "멕시코 시티 길거리 사진",
+                    "culturalBackground": "레바논계 이민자들의 샤와르마 문화가 멕시코에서 변형된 요리입니다."
                 }
             }
         ]
@@ -135,13 +285,13 @@ def seed_dummy_data():
         # ==================== 사용자별 저장된 음식 데이터 생성 ====================
         print("3. 사용자별 저장된 음식 데이터 생성 중...")
         
-        # 각 사용자별로 다른 음식을 저장하도록 구성
+        # 각 사용자별로 4개씩, 국가 섞어서 저장
         user_foods_mapping = {
-            "user_001": ["JP_tonkatsu", "JP_ramen"],  # 일본 여행자
-            "user_002": ["KR_bibimbap"],              # 한국 사용자
-            "user_003": ["US_burger"]                  # 미국 사용자
+            "user_001": ["JP_tonkatsu", "KR_bibimbap", "US_burger", "TH_padthai"],
+            "user_002": ["KR_tteokbokki", "JP_ramen", "CN_kungpao", "ES_paella"],
+            "user_003": ["US_pizza", "FR_crepe", "VN_pho", "MX_tacosalpastor"]
         }
-        
+
         for user_uid, food_ids in user_foods_mapping.items():
             for food_id in food_ids:
                 # 해당 음식 정보 찾기
@@ -159,7 +309,7 @@ def seed_dummy_data():
                 }
                 
                 # users/{uid}/saved_foods 서브컬렉션에 저장
-                saved_food_ref = db.collection('users').document(user_uid).collection('saved_foods').document(food_id)
+                saved_food_ref = db.collection('users').document(user_uid).collection('saveFoods').document(food_id)
                 
                 # datetime을 ISO 형식으로 변환
                 saved_food_data_copy = saved_food_data.copy()

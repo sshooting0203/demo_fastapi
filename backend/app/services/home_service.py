@@ -1,134 +1,87 @@
-from typing import List, Optional
-from ..models.ranking import TopFoodSnapshot
-from ..models.user import User
+from typing import Optional, Dict
 from ..db.firestore_client import firestore_client
-from datetime import datetime
 
-class HomeService:    
-    def get_user_travel_country(self, uid: str) -> Optional[str]:
-        """사용자의 현재 여행 국가(국가코드; ex KR) 조회"""
-        try:
-            # Firestore에서 사용자 정보 조회 (동기 방식)
-            user_doc = firestore_client.db.collection("users").document(uid).get()
-            
-            if user_doc.exists:
-                user_data = user_doc.to_dict()
-                return user_data.get("currentCountry")
-            
+class HomeService:
+    # ---------- 핵심 헬퍼(양방향) ----------
+    def _get_country_by_code(self, code: str) -> Optional[Dict]:
+        """CODE -> {code, name, nameKo, flag}"""
+        if not code:
             return None
-        except Exception:
+        code = code.strip().upper()
+        doc = firestore_client.db.collection("country").document(code).get()
+        if not doc.exists:
             return None
-    
-    def get_top_foods_by_country(self, country_code: str, limit: int = 3) -> List[TopFoodSnapshot]:
-        """특정 국가(국가코드; ex KR)에서 검색 기록이 많은 순으로 상위 N개 음식 조회"""
-        try:
-            # Firestore에서 해당 국가의 상위 음식 조회 (동기 방식)
-            # country_rankings/{country} 문서들에서 topFoods 필드 조회
-            country_doc = firestore_client.db.collection("country_rankings").document(country_code).get()
-            
-            if country_doc.exists:
-                data = country_doc.to_dict()
-                top_foods = data.get("topFoods", [])
-                
-                # 검색 횟수 기준으로 정렬하고 상위 N개만 반환
-                sorted_foods = sorted(top_foods, key=lambda x: x["searchCount"], reverse=True)[:limit]
-                
-                # TopFoodSnapshot(랭킹.py) 모델에 맞게 변환
-                result = []
-                for food in sorted_foods:
-                    result.append(TopFoodSnapshot(
-                        foodId=food["foodId"],
-                        country=country_code,
-                        foodName=food["foodName"],
-                        searchCount=food["searchCount"],
-                        saveCount=food["saveCount"]
-                    ))
-                return result
-            
-            return []
-        except Exception:
-            return []
-    
-    def get_country_code_by_name(self, country_name: str) -> Optional[str]:
-        """국가명(ex 한국)으로 국가코드(ex KR) 조회"""
-        try:
-            # countries 컬렉션에서 국가명으로 검색
-            countries_ref = firestore_client.db.collection("countries")
-            query = countries_ref.where("nameKo", "==", country_name).limit(1)
-            docs = query.get()
-            
-            if docs:
-                return docs[0].id
-            
-            # 영어명으로도 검색
-            query = countries_ref.where("name", "==", country_name).limit(1)
-            docs = query.get()
-            
-            if docs:
-                return docs[0].id
-            
+        data = doc.to_dict() or {}
+        return {"code": code, "name": data.get("name"), "nameKo": data.get("nameKo"), "flag": data.get("flag")}
+
+    def _get_country_by_name(self, name: str) -> Optional[Dict]:
+        """nameKo/name -> {code, name, nameKo, flag}"""
+        if not name:
             return None
-        except Exception:
-            return None
-    
-    def register_travel_country(self, uid: str, country_name: str) -> dict:
-        """사용자의 여행 국가 등록"""
-        try:
-            # 국가명을 국가코드로 변환
-            country_code = self.get_country_code_by_name(country_name)
-            
-            if not country_code: # DB에 없는 경우(지금 더미로 10개 조금 넣어둠)
-                raise ValueError(f"지원하지 않는 국가입니다: {country_name}")
-            
-            # 사용자 문서 업데이트
-            user_ref = firestore_client.db.collection("users").document(uid)
-            user_ref.update({"currentCountry": country_code})
-            
-            return {
-                "countryCode": country_code,
-                "countryName": country_name
-            }
-        except Exception as e:
-            raise e
-    
-    def get_travel_country_info(self, uid: str) -> Optional[dict]:
-        """사용자의 여행 국가 정보 조회"""
-        try:
-            travel_country = self.get_user_travel_country(uid)
-            
-            if travel_country:
-                # 국가 정보 조회
-                country_doc = firestore_client.db.collection("countries").document(travel_country).get()
-                if country_doc.exists:
-                    country_data = country_doc.to_dict()
-                    return {
-                        "countryCode": travel_country,
-                        "countryName": country_data.get("nameKo"),
-                        "flag": country_data.get("flag")
-                    }
-            
-            return None
-        except Exception:
+        name = name.strip()
+        col = firestore_client.db.collection("country")
+
+        # 한글명 우선
+        docs = col.where("nameKo", "==", name).limit(1).get()
+        if docs:
+            d = docs[0]; data = d.to_dict() or {}
+            return {"code": d.id, "name": data.get("name"), "nameKo": data.get("nameKo"), "flag": data.get("flag")}
+
+        # 영문명 대체
+        docs = col.where("name", "==", name).limit(1).get()
+        if docs:
+            d = docs[0]; data = d.to_dict() or {}
+            return {"code": d.id, "name": data.get("name"), "nameKo": data.get("nameKo"), "flag": data.get("flag")}
+
+        return None
+
+    # ---------- 등록: DB에는 code만 저장 ----------
+    def register_travel_country(self, uid: str, country_code: str | None = None, country_name: str | None = None) -> Dict:
+        """
+        요청은 code 또는 name 허용(문서 스펙).
+        내부 저장은 항상 users/{uid}.currentCountry = KR (대문자 고정).
+        응답은 {code,name} (문서 스펙).
+        """
+        country = None
+        if country_code:
+            country = self._get_country_by_code(country_code)
+        if not country and country_name:
+            country = self._get_country_by_name(country_name)
+
+        if not country:
+            raw = country_code or country_name or ""
+            raise ValueError(f"지원하지 않는 국가입니다: {raw}")
+
+        # set(merge)로 안전 저장
+        firestore_client.db.collection("users").document(uid).set(
+            {"currentCountry": country["code"]}, merge=True
+        )
+        # 응답은 영문 name 우선(없으면 nameKo)
+        return {"code": country["code"], "name": country.get("name") or country.get("nameKo")}
+
+    # ---------- 표시용 조회: code -> name/flag 해석 ----------
+    def get_travel_country_info(self, uid: str) -> Optional[Dict]:
+        """
+        홈 화면에서 표시할 사용자 여행국가 정보.
+        - DB에서 code만 읽고
+        - countries 컬렉션으로 표시용 데이터(nameKo/name/flag) 합성
+        """
+        user_doc = firestore_client.db.collection("users").document(uid).get()
+        if not user_doc.exists:
             return None
 
-    async def get_home_data(self, uid: str):
-        """홈화면 데이터 조회"""
-        # 1. 사용자 여행 국가 가져오기
-        travel_country_info = self.get_travel_country_info(uid)
-        
-        if travel_country_info:
-            country_code = travel_country_info['countryCode']
-            # 2. 해당 국가의 상위 음식 가져오기 (기존 메서드 사용)
-            top_foods = self.get_top_foods_by_country(country_code, limit=3)
-        else:
-            country_code = 'JP'
-            top_foods = []
-        
+        code = (user_doc.to_dict() or {}).get("currentCountry")
+        if not code:
+            return None
+
+        c = self._get_country_by_code(code)
+        if not c:
+            return None
+
         return {
-            "topFoods": top_foods,
-            "country": country_code,
-            "travelCountryInfo": travel_country_info
+            "countryCode": c["code"],
+            "countryName": c.get("nameKo") or c.get("name"),  # 한국어 우선 표시
+            "flag": c.get("flag"),
         }
 
-# 서비스 인스턴스 생성
 home_service = HomeService()

@@ -403,7 +403,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return user_info
 
     except Exception as e:
-        # 디버깅을 위해 에뮬레이터/실서버 상태와 함께 로깅
+        # 디버깅을 위해 에뮬레이터/실서버 상태와 함께 로깅 -> 지금 에뮬레이터 X
         logger.error(f"[auth] verify_id_token 실패 (emulator={is_emulator}): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
