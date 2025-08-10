@@ -15,12 +15,11 @@ security = HTTPBearer()
 
 @router.post("/login")
 async def login_with_firebase_token(
-    current_user: Dict = Depends(get_current_user),   # ✅ 의존성으로 바로 받기
+    current_user: Dict = Depends(get_current_user),
 ):
     user = await user_service.create_or_update_user(current_user)
     return {
         "success": True,
-        "message": "로그인 성공",
         "user": {
             "uid": user.uid,
             "displayName": user.displayName,
@@ -29,6 +28,7 @@ async def login_with_firebase_token(
         },
     }
 
+# 이건 홈화면용(이름/최근여행국) 표시할 용도로 로그인 사용자 간단 정보만 주는 엔드포인트임
 @router.get("/me")
 async def get_current_user_info(
     current_user: Dict = Depends(get_current_user), 
