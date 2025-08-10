@@ -1,250 +1,186 @@
 import os
 import json
-from datetime import datetime, timezone
-from typing import Dict, List
-
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
+from datetime import datetime, timedelta
 
-"""
-기능 테스트용 : '더미 데이터'만 주입
-- 기존 참조 컬렉션(countries, allergy_codes, dietary_codes)과는 별도임. 얜 삭제하고 수정할 거.
-- 더미 전용 ID에 'DUMMY_' 접두사를 사용해서 구분할 거 ...
-"""
-
-DEMO_UID = "DUMMY_user_01"
-DEMO_EMAIL = "dummy1@example.com"
-DEFAULT_CURRENT_COUNTRY = "ES"  # 홈 화면 테스트용 -> 나라 입력 시 NULL 아니게 됨(POST 형식으로 처리할 듯?)
-
-# 국가별 더미 랭킹 원장(foods) + popular_foods 더미
-POPULAR_FOODS_SEED: List[Dict] = [
-    {
-        "id": "DUMMY_JP_tonkatsu",
-        "country": "JP",
-        "slug": "tonkatsu",
-        "names": {"default": "Tonkatsu", "ko": "돈카츠", "ja": "とんかつ"},
-        "foodInfo": {
-            "summary": "바삭한 빵가루 튀김을 입힌 일본식 돼지고기 커틀릿.",
-            "ingredients": ["pork", "breadcrumbs", "egg", "flour", "cabbage", "sauce"],
-            "allergens": ["EGG","WHEAT"],
-            "imageUrl": "https://example.com/tonkatsu.jpg",
-            "imageSource": "seed",
-            "culturalBackground": "요쇼쿠 계열 서양식의 일본 현지화 메뉴."
-        },
-        "searchCount": 123,
-        "saveCount": 45,
-    },
-    {
-        "id": "DUMMY_ES_paella",
-        "country": "ES",
-        "slug": "paella",
-        "names": {"default": "Paella", "ko": "빠에야", "es": "Paella"},
-        "foodInfo": {
-            "summary": "사프란 향의 쌀과 해산물/고기를 함께 끓여낸 스페인 대표 요리.",
-            "ingredients": ["rice", "saffron", "seafood", "chicken", "peas"],
-            "allergens": ["SHELLFISH"],
-            "imageUrl": "https://example.com/paella.jpg",
-            "imageSource": "seed",
-            "culturalBackground": "발렌시아 지역에서 유래한 전통 요리."
-        },
-        "searchCount": 98,
-        "saveCount": 51,
-    },
-    {
-        "id": "DUMMY_FR_crepe",
-        "country": "FR",
-        "slug": "crepe",
-        "names": {"default": "Crêpe", "ko": "크레페", "fr": "Crêpe"},
-        "foodInfo": {
-            "summary": "얇게 부친 프랑스식 팬케이크로 달콤/짭짤 토핑과 곁들여 먹는다.",
-            "ingredients": ["wheat flour", "egg", "milk", "butter"],
-            "allergens": ["WHEAT","EGG","MILK"],
-            "imageUrl": "https://example.com/crepe.jpg",
-            "imageSource": "seed",
-            "culturalBackground": "브르타뉴 지역이 유명하며 길거리 간식으로도 대중적."
-        },
-        "searchCount": 76,
-        "saveCount": 22,
-    },
-]
-
-# 데모 유저가 저장한 음식
-SAVED_FOODS_FOR_DEMO: List[Dict] = [
-    {
-        "id": "DUMMY_JP_tonkatsu",
-        "country": "JP",
-        "foodName": "Tonkatsu",
-        "translatedText": "돈카츠",
-        "userImageUrl": "https://example.com/user_tonkatsu.jpg",
-        "summaryShort": "바삭한 일본식 커틀릿",
-        "allergens": ["EGG","WHEAT"],
-        "restaurantName": "Maisen Aoyama",
-        "review": "정말 바삭했고 소스가 좋았음",
-        "rating": 4.5,
-    },
-    {
-        "id": "DUMMY_ES_paella",
-        "country": "ES",
-        "foodName": "Paella",
-        "translatedText": "빠에야",
-        "userImageUrl": "https://example.com/user_paella.jpg",
-        "summaryShort": "사프란 향의 해산물 쌀요리",
-        "allergens": ["SHELLFISH"],
-        "restaurantName": "Bar La Pepa",
-        "review": "향이 진하고 해산물이 신선",
-        "rating": 4.0,
-    },
-]
-
-# 검색 로그(TTL 대상)
-SEARCH_LOGS_SEED: List[Dict] = [
-    {
-        "id": "DUMMY_log_1",
-        "userId": DEMO_UID,
-        "country": "JP",
-        "foodId": "DUMMY_JP_tonkatsu",
-        "originalText": "とんかつ",
-        "translatedText": "돈카츠",
-        "searchType": "text",
-        "retentionDays": 30,
-    },
-    {
-        "id": "DUMMY_log_2",
-        "userId": DEMO_UID,
-        "country": "ES",
-        "foodId": "DUMMY_ES_paella",
-        "originalText": "Paella",
-        "translatedText": "빠에야",
-        "searchType": "text",
-        "retentionDays": 30,
-    },
-    {
-        "id": "DUMMY_log_3",
-        "userId": DEMO_UID,
-        "country": "FR",
-        "foodId": "DUMMY_FR_crepe",
-        "originalText": "Crêpe",
-        "translatedText": "크레페",
-        "searchType": "ocr",
-        "retentionDays": 30,
-    },
-]
-
-# -----------------------------
-# Firestore 초기화
-# -----------------------------
 load_dotenv()
-firebase_credentials = json.loads(os.getenv("FIREBASE_CREDENTIALS"))
-cred = credentials.Certificate(firebase_credentials)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
 
-def now_utc():
-    return datetime.now(timezone.utc)
-
-def upsert(col: str, doc_id: str, data: dict):
-    db.collection(col).document(doc_id).set(data, merge=True)
-
-def upsert_sub(parent_ref, subcol: str, doc_id: str, data: dict):
-    parent_ref.collection(subcol).document(doc_id).set(data, merge=True)
-
-def seed_user_and_saved():
-    print("▶ Seeding demo user & saved_foods ...")
-    user_ref = db.collection("users").document(DEMO_UID)
-    upsert("users", DEMO_UID, {
-        "uid": DEMO_UID,
-        "email": DEMO_EMAIL,
-        "allergies": ["EGG"],
-        "dietaryRestrictions": ["VEGETARIAN"],  # 배열 형태긴 함
-        "currentCountry": DEFAULT_CURRENT_COUNTRY,
-        "createdAt": now_utc(),
-        "updatedAt": now_utc(),
-    })
-    # saved_foods
-    for item in SAVED_FOODS_FOR_DEMO:
-        upsert_sub(user_ref, "saved_foods", item["id"], {
-            **item,
-            "savedAt": now_utc(),
-        })
-        print(f"  - users/{DEMO_UID}/saved_foods/{item['id']} upserted")
-
-def seed_popular_foods():
-    print("▶ Seeding popular_foods ...")
-    for f in POPULAR_FOODS_SEED:
-        upsert("popular_foods", f["id"], {
-            "id": f["id"],
-            "country": f["country"],
-            "slug": f["slug"],
-            "names": f["names"],
-            "foodInfo": f["foodInfo"],
-            "searchCount": f["searchCount"],
-            "saveCount": f["saveCount"],
-            "lastSearched": now_utc(),
-            "createdAt": now_utc(),
-            "updatedAt": now_utc(),
-        })
-        print(f"  - popular_foods/{f['id']} upserted")
-
-def seed_country_rankings():
-    print("▶ Seeding country_rankings (foods ledger + top snapshot) ...")
-
-    # 국가별로 묶기
-    by_country: Dict[str, List[Dict]] = {}
-    for f in POPULAR_FOODS_SEED:
-        by_country.setdefault(f["country"], []).append(f)
-
-    for country, items in by_country.items():
-        country_ref = db.collection("country_rankings").document(country)
-
-        # 1) 루트 문서 생성(있으면 병합)
-        country_ref.set({"lastTopSnapshotAt": now_utc()}, merge=True)
-
-        # 2) foods 원장(서브컬렉션)
-        for f in items:
-            ledger_doc = {
-                "foodId": f["id"],
-                "searchCount": f["searchCount"],
-                "saveCount": f["saveCount"],
-                "lastSearched": now_utc(),
-                "lastSaved": now_utc(),
+def seed_dummy_data():
+    """더미 데이터를 Firestore에 생성합니다 (모델 구조에 맞게 수정)"""
+    try:
+        # Firebase 초기화
+        if not firebase_admin._apps:
+            firebase_credentials = json.loads(os.getenv("FIREBASE_CREDENTIALS"))
+            cred = credentials.Certificate(firebase_credentials)
+            firebase_admin.initialize_app(cred)
+            print("Firebase 초기화 완료")
+        
+        db = firestore.client()
+        
+        # ==================== 사용자 데이터 생성 ====================
+        print("1. 사용자 데이터 생성 중...")
+        
+        # 모델 구조에 맞는 사용자 데이터
+        dummy_users = [
+            {
+                "uid": "user_001",
+                "displayName": "백산수님",
+                "email": "test1@example.com",
+                "allergies": ["EGG", "SHRIMP"],  # allergy_codes와 일치
+                "dietaryRestrictions": ["VEGETARIAN"],  # dietary_codes와 일치
+                "currentCountry": "JP",
+                "createdAt": datetime.now() - timedelta(days=30),
+                "updatedAt": datetime.now()
+            },
+            {
+                "uid": "user_002", 
+                "displayName": "김철수님",
+                "email": "test2@example.com",
+                "allergies": ["MILK"],
+                "dietaryRestrictions": [],
+                "currentCountry": "KR",
+                "createdAt": datetime.now() - timedelta(days=15),
+                "updatedAt": datetime.now()
+            },
+            {
+                "uid": "user_003",
+                "displayName": "John Smith",
+                "email": "test3@example.com",
+                "allergies": ["PEANUT"],
+                "dietaryRestrictions": ["VEGAN"],
+                "currentCountry": "US",
+                "createdAt": datetime.now() - timedelta(days=20),
+                "updatedAt": datetime.now()
             }
-            country_ref.collection("foods").document(f["id"]).set(ledger_doc, merge=True)
-            print(f"  - country_rankings/{country}/foods/{f['id']} upserted")
-
-        # 3) Top3 스냅샷(루트 문서 필드)
-        top3 = sorted(items, key=lambda x: (-x["searchCount"], -x["saveCount"]))[:3]
-        top_payload = {
-            "topFoods": [
-                {
-                    "foodId": f["id"],
-                    "foodName": f["names"].get("default", ""),
-                    "imageUrl": f["foodInfo"].get("imageUrl", ""),
-                    "searchCount": f.get("searchCount", 0),
-                    "saveCount": f.get("saveCount", 0),
-                } for f in top3
-            ],
-            "snapshotAt": now_utc()
+        ]
+        
+        # 사용자 데이터 저장
+        for user_data in dummy_users:
+            user_ref = db.collection('users').document(user_data['uid'])
+            user_data_copy = user_data.copy()
+            user_data_copy['createdAt'] = user_data_copy['createdAt'].isoformat()
+            user_data_copy['updatedAt'] = user_data_copy['updatedAt'].isoformat()
+            user_ref.set(user_data_copy)
+            print(f"   사용자 생성: {user_data['uid']} ({user_data['displayName']})")
+        
+        # ==================== 음식 정보 데이터 생성 ====================
+        print("2. 음식 정보 데이터 생성 중...")
+        
+        # FoodInfo 모델 구조에 맞는 음식 데이터
+        food_info_data = [
+            {
+                "foodId": "JP_tonkatsu",
+                "foodInfo": {
+                    "foodName": "돈카츠",
+                    "dishName": "とんかつ",
+                    "country": "JP",
+                    "summary": "돈카츠는 돼지고기를 빵가루를 묻혀 튀긴 일본의 대표적인 요리입니다.",
+                    "recommendations": ["고기 좋아하는 사람", "튀김 요리 선호자"],
+                    "ingredients": ["돼지고기", "빵가루", "계란", "밀가루"],
+                    "allergens": ["WHEAT", "EGG"],  # allergy_codes와 일치
+                    "imageUrl": "https://example.com/tonkatsu.jpg",
+                    "imageSource": "일본 요리 사진",
+                    "culturalBackground": "일본 메이지 시대에 서양의 커틀릿을 참고하여 만들어진 요리입니다."
+                }
+            },
+            {
+                "foodId": "JP_ramen",
+                "foodInfo": {
+                    "foodName": "라멘",
+                    "dishName": "ラーメン",
+                    "country": "JP",
+                    "summary": "라멘은 일본의 대표적인 면 요리로, 다양한 스프와 토핑으로 구성됩니다.",
+                    "recommendations": ["면 요리 애호가", "따뜻한 국물 요리 선호자"],
+                    "ingredients": ["면", "돼지뼈 스프", "차슈", "계란", "김"],
+                    "allergens": ["WHEAT", "EGG"],  # allergy_codes와 일치
+                    "imageUrl": "https://example.com/ramen.jpg",
+                    "imageSource": "일본 라멘 사진",
+                    "culturalBackground": "중국에서 유래했지만 일본에서 독자적으로 발전한 요리입니다."
+                }
+            },
+            {
+                "foodId": "KR_bibimbap",
+                "foodInfo": {
+                    "foodName": "비빔밥",
+                    "dishName": "비빔밥",
+                    "country": "KR",
+                    "summary": "비빔밥은 한국의 대표적인 한식으로, 다양한 채소와 고기를 밥과 함께 비벼 먹는 요리입니다.",
+                    "recommendations": ["건강한 식사 선호자", "채소 요리 애호가"],
+                    "ingredients": ["밥", "당근", "오이", "시금치", "고기", "고추장"],
+                    "allergens": ["TOMATO"],  # allergy_codes와 일치 (고추장에 토마토 성분)
+                    "imageUrl": "https://example.com/bibimbap.jpg",
+                    "imageSource": "한국 비빔밥 사진",
+                    "culturalBackground": "조선시대 궁중 요리에서 유래했으며, 제철 음식을 한 그릇에 담아 먹는 지혜로운 요리입니다."
+                }
+            },
+            {
+                "foodId": "US_burger",
+                "foodInfo": {
+                    "foodName": "치즈버거",
+                    "dishName": "Cheeseburger",
+                    "country": "US",
+                    "summary": "치즈버거는 미국의 대표적인 패스트푸드로, 빵, 패티, 치즈, 채소로 구성됩니다.",
+                    "recommendations": ["패스트푸드 애호가", "고기 요리 선호자"],
+                    "ingredients": ["번", "소고기 패티", "치즈", "양상추", "토마토", "양파"],
+                    "allergens": ["WHEAT", "MILK"],  # allergy_codes와 일치
+                    "imageUrl": "https://example.com/burger.jpg",
+                    "imageSource": "미국 버거 사진",
+                    "culturalBackground": "20세기 초 미국에서 시작된 패스트푸드 문화의 상징적인 요리입니다."
+                }
+            }
+        ]
+        
+        # ==================== 사용자별 저장된 음식 데이터 생성 ====================
+        print("3. 사용자별 저장된 음식 데이터 생성 중...")
+        
+        # 각 사용자별로 다른 음식을 저장하도록 구성
+        user_foods_mapping = {
+            "user_001": ["JP_tonkatsu", "JP_ramen"],  # 일본 여행자
+            "user_002": ["KR_bibimbap"],              # 한국 사용자
+            "user_003": ["US_burger"]                  # 미국 사용자
         }
-        country_ref.set(top_payload, merge=True)  # ← 문서 필드로 저장한다고 해야 함 어렵군
-        print(f"  - country_rankings/{country} top snapshot updated")
-
-def seed_search_logs():
-    print("▶ Seeding search_logs (TTL 대상) ...")
-    for log in SEARCH_LOGS_SEED:
-        upsert("search_logs", log["id"], {
-            **log,
-            "timestamp": now_utc(),
-        })
-        print(f"  - search_logs/{log['id']} upserted")
-
-def main():
-    print("== Firestore dummy seed start ==")
-    seed_user_and_saved()
-    seed_popular_foods()
-    seed_country_rankings()
-    seed_search_logs()
-    print("== Firestore dummy seed done ==")
+        
+        for user_uid, food_ids in user_foods_mapping.items():
+            for food_id in food_ids:
+                # 해당 음식 정보 찾기
+                food_info = next((item for item in food_info_data if item["foodId"] == food_id), None)
+                if not food_info:
+                    continue
+                
+                # SavedFood 모델 구조에 맞게 데이터 구성
+                saved_food_data = {
+                    "id": food_id,  # 음식 ID를 문서 ID로 사용
+                    "userImageUrl": f"https://example.com/user_{user_uid}_{food_id}.jpg",
+                    "foodInfo": food_info["foodInfo"],
+                    "restaurantName": f"{food_info['foodInfo']['country']}_restaurant",
+                    "savedAt": datetime.now() - timedelta(days=len(food_ids))
+                }
+                
+                # users/{uid}/saved_foods 서브컬렉션에 저장
+                saved_food_ref = db.collection('users').document(user_uid).collection('saved_foods').document(food_id)
+                
+                # datetime을 ISO 형식으로 변환
+                saved_food_data_copy = saved_food_data.copy()
+                saved_food_data_copy['savedAt'] = saved_food_data_copy['savedAt'].isoformat()
+                
+                saved_food_ref.set(saved_food_data_copy)
+                print(f"   저장된 음식 생성: {user_uid} -> {food_id}")
+        
+        print("더미 데이터 생성 완료!")
+        print("\n=== 생성된 데이터 구조 ===")
+        print("1. users 컬렉션: 사용자 프로필 정보")
+        print("2. users/{uid}/saved_foods 서브컬렉션: 각 사용자별 저장된 음식")
+        print("3. countries 컬렉션: 국가 정보 (setup_firestore.py에서 생성)")
+        print("4. allergy_codes 컬렉션: 알레르기 코드 (setup_firestore.py에서 생성)")
+        print("5. dietary_codes 컬렉션: 식단 제한 코드 (setup_firestore.py에서 생성)")
+        print("6. country_rankings 컬렉션: 국가별 음식 랭킹 (setup_firestore.py에서 생성)")
+        
+    except Exception as e:
+        print(f"더미 데이터 생성 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    main()
+    seed_dummy_data()

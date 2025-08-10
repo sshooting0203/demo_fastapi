@@ -159,9 +159,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/\
 
-ai_logic/node_modules/
-ai_logic/package-lock.json
-ai_logic/package.json
-ai_logic/service_key.json
-
+backend/ocr_service_key.json
 backend/service_key.json
