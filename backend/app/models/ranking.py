@@ -10,11 +10,12 @@ class TopFoodSnapshot(BaseModel):
     foodId: str = Field(..., description="음식 ID (예: JP_tonkatsu)")
     country: str = Field(..., description="국가 코드 (예: JP)") # 국가 구분용
     foodName: str = Field(..., description="음식 이름")
+    dishName: str = Field(default="", description="영어/일본어 음식 이름")
     searchCount: int = Field(..., description="검색 횟수") # 이건 로그찍기 개념으로 넣은 필드(테스트용)
     saveCount: int = Field(..., description="저장 횟수")
 
 class CountryRanking(BaseModel):
-    # 국가별 음식 랭킹 정보 (해커톤용 간단한 방식)
+    # 국가별 음식 랭킹 정보
     # 기존 CountryRankingFood를 배열 형태로 변경
     # 
     # 동작 방식:

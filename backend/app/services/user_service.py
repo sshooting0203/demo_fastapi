@@ -5,10 +5,8 @@ from ..models.user import User, SavedFood, SaveFoodRequest, DeleteSavedFoodsRequ
 from ..models.food import FoodInfo
 from ..db.firestore_client import firestore_client
 from datetime import datetime
-import firebase_admin
-from firebase_admin import auth
+from firebase_admin import auth, firestore
 import os
-from firebase_admin import auth as fb_auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,13 +15,40 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 class UserService:
+    """
+    사용자 관리 서비스
+    
+    주요 기능:
+    - 사용자 프로필 생성, 조회, 업데이트
+    - 저장된 음식 관리 (저장, 조회, 삭제)
+    - Firebase 인증 토큰 검증
+    """
+    
     def __init__(self):
+        """UserService 초기화"""
         self.db = firestore_client.db
     
     # ==================== 사용자 프로필 관리 ====================
     
     async def create_user(self, user_data: Dict[str, Any]) -> User:
-        """새 사용자 생성 (OAuth 로그인 시 자동 생성)"""
+        """
+        새 사용자 생성 (OAuth 로그인 시 자동 생성)
+        
+        Args:
+            user_data (Dict[str, Any]): 사용자 데이터
+                - uid: 사용자 ID
+                - displayName: 표시명
+                - email: 이메일
+                - allergies: 알레르기 목록
+                - dietaryRestrictions: 식단 제한
+                - currentCountry: 현재 국가
+                
+        Returns:
+            User: 생성된 사용자 객체
+            
+        Raises:
+            Exception: 사용자 생성 실패 시
+        """
         try:
             uid = user_data["uid"]
             current_time = datetime.now()
@@ -40,7 +65,7 @@ class UserService:
                 "updatedAt": current_time
             }
             
-            # Firestore에 사용자 생성 (datetime은 Firestore가 자동으로 Timestamp로 변환)
+            # Firestore에 사용자 생성
             user_ref = self.db.collection('users').document(uid)
             user_ref.set(user_doc)
             
@@ -52,24 +77,42 @@ class UserService:
             raise Exception(f"사용자 생성 중 오류 발생: {str(e)}")
     
     async def create_or_update_user(self, user_data: Dict[str, Any]) -> User:
-        """사용자 생성 또는 업데이트 (OAuth 로그인 시 사용)"""
+        """
+        사용자 생성 또는 업데이트 (OAuth 로그인 시 사용)
+        
+        Args:
+            user_data (Dict[str, Any]): 사용자 데이터
+            
+        Returns:
+            User: 생성되거나 업데이트된 사용자 객체
+            
+        Raises:
+            Exception: 사용자 생성/업데이트 실패 시
+        """
         try:
             uid = user_data["uid"]
             
             # 기존 사용자 확인
-            existing_user = await self.get_user_profile(uid)
+            user_ref = self.db.collection('users').document(uid)
+            doc = user_ref.get()
             
-            if existing_user:
+            if doc.exists:
                 # 기존 사용자가 있으면 업데이트
                 update_data = {
-                    "displayName": user_data.get("displayName", existing_user.displayName),
-                    "email": user_data.get("email", existing_user.email),
+                    "displayName": user_data.get("displayName", doc.to_dict().get("displayName", "")),
+                    "email": user_data.get("email", doc.to_dict().get("email", "")),
                     "updatedAt": datetime.now()
                 }
                 
-                updated_user = await self.update_user_profile(uid, update_data)
+                user_ref.update(update_data)
+                
+                # 업데이트된 사용자 정보 반환
+                updated_doc = user_ref.get()
+                updated_data = updated_doc.to_dict()
+                updated_data["uid"] = uid
+                
                 logger.info(f"기존 사용자 업데이트 완료: {uid}")
-                return updated_user
+                return User(**updated_data)
             else:
                 # 새 사용자 생성
                 new_user = await self.create_user(user_data)
@@ -80,8 +123,60 @@ class UserService:
             logger.error(f"사용자 생성/업데이트 실패: {str(e)}")
             raise Exception(f"사용자 생성/업데이트 중 오류 발생: {str(e)}")
     
+    async def update_user(self, uid: str, update_data: Dict[str, Any]) -> User:
+        """
+        사용자 정보 통합 업데이트
+        
+        Args:
+            uid (str): 사용자 ID
+            update_data (Dict[str, Any]): 업데이트할 데이터
+                - displayName: 표시명
+                - email: 이메일
+                - allergies: 알레르기 목록
+                - dietaryRestrictions: 식단 제한
+                - currentCountry: 현재 국가
+                
+        Returns:
+            User: 업데이트된 사용자 객체
+            
+        Raises:
+            Exception: 사용자 정보 업데이트 실패 시
+        """
+        try:
+            # updatedAt 필드 자동 업데이트
+            update_data["updatedAt"] = datetime.now()
+            
+            user_ref = self.db.collection('users').document(uid)
+            user_ref.update(update_data)
+            
+            # 업데이트된 사용자 정보 반환
+            updated_doc = user_ref.get()
+            if not updated_doc.exists:
+                raise Exception("업데이트된 사용자 정보를 찾을 수 없습니다.")
+            
+            updated_data = updated_doc.to_dict()
+            updated_data["uid"] = uid
+            
+            logger.info(f"사용자 정보 업데이트 완료: {uid}")
+            return User(**updated_data)
+            
+        except Exception as e:
+            logger.error(f"사용자 정보 업데이트 실패: {str(e)}")
+            raise Exception(f"사용자 정보 업데이트 중 오류 발생: {str(e)}")
+    
     async def get_user_profile(self, uid: str) -> Optional[User]:
-        """사용자 프로필 정보를 가져옵니다."""
+        """
+        사용자 프로필 정보 조회
+        
+        Args:
+            uid (str): 사용자 ID
+            
+        Returns:
+            Optional[User]: 사용자 객체 또는 None (존재하지 않는 경우)
+            
+        Raises:
+            Exception: 프로필 조회 실패 시
+        """
         try:
             user_ref = self.db.collection('users').document(uid)
             doc = user_ref.get()
@@ -91,21 +186,20 @@ class UserService:
                 return None
             
             data = doc.to_dict()
+            data["uid"] = uid
             
-            # datetime 필드 변환 (Firestore Timestamp 객체 처리)
-            if 'createdAt' in data:
-                if hasattr(data['createdAt'], 'timestamp'):
-                    # Firestore Timestamp 객체인 경우
-                    data['createdAt'] = datetime.fromtimestamp(data['createdAt'].timestamp())
-                elif isinstance(data['createdAt'], str):
-                    data['createdAt'] = datetime.fromisoformat(data['createdAt'])
-            
-            if 'updatedAt' in data:
-                if hasattr(data['updatedAt'], 'timestamp'):
-                    # Firestore Timestamp 객체인 경우
-                    data['updatedAt'] = datetime.fromtimestamp(data['updatedAt'].timestamp())
-                elif isinstance(data['updatedAt'], str):
-                    data['updatedAt'] = datetime.fromisoformat(data['updatedAt'])
+            # Firestore Timestamp 객체를 Python datetime으로 변환
+            timestamp_fields = ['createdAt', 'updatedAt']
+            for field in timestamp_fields:
+                if field in data:
+                    timestamp_value = data[field]
+                    if hasattr(timestamp_value, 'timestamp'):
+                        data[field] = datetime.fromtimestamp(timestamp_value.timestamp())
+                    elif isinstance(timestamp_value, str):
+                        try:
+                            data[field] = datetime.fromisoformat(timestamp_value)
+                        except ValueError:
+                            pass
             
             return User(**data)
             
@@ -113,75 +207,22 @@ class UserService:
             logger.error(f"사용자 프로필 조회 실패: {str(e)}")
             raise Exception(f"사용자 프로필 조회 중 오류 발생: {str(e)}")
     
-    async def update_user_profile(self, uid: str, update_data: Dict[str, Any]) -> User:
-        """사용자 프로필 정보를 업데이트합니다."""
-        try:
-            # updatedAt 필드 자동 업데이트 (Firestore가 자동으로 Timestamp로 변환)
-            update_data["updatedAt"] = datetime.now()
-            
-            user_ref = self.db.collection('users').document(uid)
-            user_ref.update(update_data)
-            
-            # 업데이트된 사용자 정보 반환
-            updated_user = await self.get_user_profile(uid)
-            if not updated_user:
-                raise Exception("업데이트된 사용자 정보를 찾을 수 없습니다.")
-            
-            logger.info(f"사용자 프로필 업데이트 완료: {uid}")
-            return updated_user
-            
-        except Exception as e:
-            logger.error(f"사용자 프로필 업데이트 실패: {str(e)}")
-            raise Exception(f"사용자 프로필 업데이트 중 오류 발생: {str(e)}")
-    
-    # MVP 단계에서는 사용하지 않음 - 나중에 필요시 주석 해제
-    # async def update_allergies(self, uid: str, allergies: List[str]) -> User:
-    #     """사용자의 알레르기 정보를 업데이트합니다."""
-    #     try:
-    #         update_data = {
-    #             "allergies": allergies,
-    #             "updatedAt": datetime.now()
-    #         }
-    #         
-    #         return await self.update_user_profile(uid, update_data)
-    #         
-    #     except Exception as e:
-    #         logger.error(f"알레르기 정보 업데이트 실패: {str(e)}")
-    #         raise Exception(f"알레르기 정보 업데이트 중 오류 발생: {str(e)}")
-    
-    # MVP 단계에서는 사용하지 않음 - 나중에 필요시 주석 해제
-    # async def update_dietary_restrictions(self, uid: str, restrictions: List[str]) -> User:
-    #     """사용자의 식단 제한 정보를 업데이트합니다."""
-    #     try:
-    #         update_data = {
-    #             "dietaryRestrictions": restrictions,
-    #             "updatedAt": datetime.now()
-    #         }
-    #         
-    #         return await self.update_user_profile(uid, update_data)
-    #         
-    #     except Exception as e:
-    #         logger.error(f"식단 제한 정보 업데이트 실패: {str(e)}")
-    #         raise Exception(f"식단 제한 정보 업데이트 중 오류 발생: {str(e)}")
-    
-    async def update_travel_country(self, uid: str, country_code: str) -> User:
-        """사용자의 여행 국가를 업데이트합니다."""
-        try:
-            update_data = {
-                "currentCountry": country_code,
-                "updatedAt": datetime.now()
-            }
-            
-            return await self.update_user_profile(uid, update_data)
-            
-        except Exception as e:
-            logger.error(f"여행 국가 업데이트 실패: {str(e)}")
-            raise Exception(f"여행 국가 업데이트 중 오류 발생: {str(e)}")
-    
     # ==================== 저장된 음식 관리 ====================
     
     async def save_food(self, uid: str, save_request: SaveFoodRequest) -> SavedFood:
-        """사용자가 음식을 저장합니다."""
+        """
+        사용자가 음식을 저장
+        
+        Args:
+            uid (str): 사용자 ID
+            save_request (SaveFoodRequest): 음식 저장 요청
+            
+        Returns:
+            SavedFood: 저장된 음식 객체
+            
+        Raises:
+            Exception: 음식 저장 실패 시
+        """
         try:
             # 저장된 음식 데이터 구성
             saved_food = SavedFood(
@@ -193,9 +234,11 @@ class UserService:
             )
             
             # Firestore에 저장 (users/{uid}/saved_foods 서브컬렉션)
-            # datetime은 Firestore가 자동으로 Timestamp로 변환
             saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(save_request.foodId)
             saved_food_ref.set(saved_food.model_dump())
+            
+            # 메타데이터 업데이트 (저장 횟수 증가)
+            await self._update_food_save_count(save_request.foodInfo)
             
             logger.info(f"음식 저장 완료: 사용자 {uid}, 음식 {save_request.foodId}")
             return saved_food
@@ -205,7 +248,18 @@ class UserService:
             raise Exception(f"음식 저장 중 오류 발생: {str(e)}")
     
     async def get_user_saved_foods(self, uid: str) -> List[SavedFood]:
-        """사용자가 저장한 음식 목록을 조회합니다. (마이페이지용)"""
+        """
+        사용자가 저장한 음식 목록 조회 (마이페이지용)
+        
+        Args:
+            uid (str): 사용자 ID
+            
+        Returns:
+            List[SavedFood]: 저장된 음식 목록
+            
+        Raises:
+            Exception: 저장된 음식 조회 실패 시
+        """
         try:
             logger.info(f"저장된 음식 조회 시작: 사용자 {uid}")
             
@@ -217,13 +271,18 @@ class UserService:
             for doc in docs:
                 data = doc.to_dict()
                 
-                # datetime 필드 변환 (Firestore Timestamp 객체 처리)
-                if 'savedAt' in data:
-                    if hasattr(data['savedAt'], 'timestamp'):
-                        # Firestore Timestamp 객체인 경우
-                        data['savedAt'] = datetime.fromtimestamp(data['savedAt'].timestamp())
-                    elif isinstance(data['savedAt'], str):
-                        data['savedAt'] = datetime.fromisoformat(data['savedAt'])
+                # Firestore Timestamp 객체를 Python datetime으로 변환
+                timestamp_fields = ['savedAt']
+                for field in timestamp_fields:
+                    if field in data:
+                        timestamp_value = data[field]
+                        if hasattr(timestamp_value, 'timestamp'):
+                            data[field] = datetime.fromtimestamp(timestamp_value.timestamp())
+                        elif isinstance(timestamp_value, str):
+                            try:
+                                data[field] = datetime.fromisoformat(timestamp_value)
+                            except ValueError:
+                                pass
                 
                 # FoodInfo 모델 변환
                 if 'foodInfo' in data:
@@ -231,7 +290,6 @@ class UserService:
                         data['foodInfo'] = FoodInfo(**data['foodInfo'])
                     except Exception as e:
                         logger.warning(f"FoodInfo 모델 변환 실패: {str(e)}")
-                        # 변환 실패 시 원본 데이터 유지
                         pass
                 
                 saved_foods.append(SavedFood(**data))
@@ -243,44 +301,102 @@ class UserService:
             logger.error(f"저장된 음식 조회 실패: {str(e)}")
             raise Exception(f"저장된 음식 조회 중 오류 발생: {str(e)}")
     
-    async def get_saved_food_by_id(self, uid: str, food_id: str) -> Optional[SavedFood]:
-        """특정 저장된 음식을 조회합니다."""
+    async def _update_food_save_count(self, food_info: FoodInfo):
+        """
+        음식 저장 시 메타데이터의 저장 횟수 업데이트
+        메타데이터가 없으면 새로 생성
+        
+        Args:
+            food_info (FoodInfo): 음식 정보
+        """
         try:
-            saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(food_id)
-            doc = saved_food_ref.get()
+            # 문서 ID 생성 (country_dishName 형태)
+            doc_id = f"{food_info.country}_{food_info.dishName}"
             
-            if not doc.exists:
-                return None
+            # 기존 메타데이터 확인
+            metadata_ref = self.db.collection('food_metadata').document(doc_id)
+            doc = metadata_ref.get()
             
-            data = doc.to_dict()
-            
-            # datetime 필드 변환 (Firestore Timestamp 객체 처리)
-            if 'savedAt' in data:
-                if hasattr(data['savedAt'], 'timestamp'):
-                    # Firestore Timestamp 객체인 경우
-                    data['savedAt'] = datetime.fromtimestamp(data['savedAt'].timestamp())
-                elif isinstance(data['savedAt'], str):
-                    data['savedAt'] = datetime.fromisoformat(data['savedAt'])
-            
-            # FoodInfo 모델 변환
-            if 'foodInfo' in data:
-                try:
-                    data['foodInfo'] = FoodInfo(**data['foodInfo'])
-                except Exception as e:
-                    logger.warning(f"FoodInfo 모델 변환 실패: {str(e)}")
-                    # 변환 실패 시 원본 데이터 유지
-                    pass
-            
-            return SavedFood(**data)
-            
+            if doc.exists:
+                # 기존 메타데이터가 있으면 저장 횟수 증가
+                metadata_ref.update({
+                    'saveCount': firestore.Increment(1),
+                    'updatedAt': datetime.now().isoformat()
+                })
+                logger.info(f"음식 저장 횟수 업데이트 완료: {doc_id}")
+            else:
+                # 메타데이터가 없으면 새로 생성
+                metadata = {
+                    'country': food_info.country,
+                    'foodName': food_info.foodName,
+                    'dishName': food_info.dishName,
+                    'searchCount': 0,  # 검색 횟수
+                    'saveCount': 1,    # 저장 횟수 (최초 저장이므로 1)
+                    'lastSearched': None,  # 마지막 검색 시간
+                    'updatedAt': datetime.now().isoformat()
+                }
+                
+                metadata_ref.set(metadata)
+                logger.info(f"새로운 음식 메타데이터 생성 완료: {doc_id}")
+                
         except Exception as e:
-            logger.error(f"저장된 음식 조회 실패: {str(e)}")
-            raise Exception(f"저장된 음식 조회 중 오류 발생: {str(e)}")
+            logger.error(f"음식 저장 횟수 업데이트 실패: {str(e)}")
+    
+    async def _decrease_food_save_count(self, food_info: FoodInfo):
+        """
+        음식 삭제 시 메타데이터의 저장 횟수 감소
+        
+        Args:
+            food_info (FoodInfo): 음식 정보
+        """
+        try:
+            # 문서 ID 생성 (country_dishName 형태)
+            doc_id = f"{food_info.country}_{food_info.dishName}"
+            
+            # 메타데이터에서 저장 횟수 감소
+            metadata_ref = self.db.collection('food_metadata').document(doc_id)
+            doc = metadata_ref.get()
+            
+            if doc.exists:
+                data = doc.to_dict()
+                current_save_count = data.get('saveCount', 0)
+                
+                if current_save_count > 0:
+                    # 저장 횟수 감소
+                    metadata_ref.update({
+                        'saveCount': current_save_count - 1,
+                        'updatedAt': datetime.now().isoformat()
+                    })
+                    logger.info(f"음식 저장 횟수 감소 완료: {doc_id} (현재: {current_save_count - 1})")
+                else:
+                    logger.warning(f"저장 횟수가 이미 0입니다: {doc_id}")
+            else:
+                logger.warning(f"메타데이터를 찾을 수 없습니다: {doc_id}")
+                
+        except Exception as e:
+            logger.error(f"음식 저장 횟수 감소 실패: {str(e)}")
     
     async def delete_saved_foods(self, uid: str, delete_request: DeleteSavedFoodsRequest) -> Dict[str, Any]:
-        """사용자가 저장한 음식을 삭제합니다."""
+        """
+        사용자가 저장한 음식 일괄 삭제
+        
+        Args:
+            uid (str): 사용자 ID
+            delete_request (DeleteSavedFoodsRequest): 삭제 요청 (foodIds 배열)
+            
+        Returns:
+            Dict[str, Any]: 삭제 결과
+                - success: 성공 여부
+                - deletedCount: 삭제된 음식 수
+                - failedDeletions: 삭제 실패한 음식 ID 목록
+                - message: 결과 메시지
+                
+        Raises:
+            Exception: 음식 삭제 실패 시
+        """
         try:
             logger.info(f"음식 삭제 시작: 사용자 {uid}, 삭제할 음식 ID들: {delete_request.foodIds}")
+            
             deleted_count = 0
             failed_deletions = []
             
@@ -292,6 +408,16 @@ class UserService:
                     
                     if doc.exists:
                         logger.info(f"문서 존재 확인: {food_id}")
+                        
+                        # 삭제 전에 음식 정보를 가져와서 메타데이터 업데이트
+                        food_data = doc.to_dict()
+                        if 'foodInfo' in food_data:
+                            try:
+                                food_info = FoodInfo(**food_data['foodInfo'])
+                                await self._decrease_food_save_count(food_info)
+                            except Exception as e:
+                                logger.warning(f"메타데이터 업데이트 실패: {str(e)}")
+                        
                         saved_food_ref.delete()
                         deleted_count += 1
                         logger.info(f"음식 삭제 완료: 사용자 {uid}, 음식 {food_id}")
@@ -303,6 +429,7 @@ class UserService:
                     logger.error(f"음식 삭제 실패: {food_id}, 오류: {str(e)}")
                     failed_deletions.append(food_id)
             
+            # 결과 구성
             result = {
                 "success": True,
                 "deletedCount": deleted_count,
@@ -319,79 +446,29 @@ class UserService:
         except Exception as e:
             logger.error(f"음식 삭제 실패: {str(e)}")
             raise Exception(f"음식 삭제 중 오류 발생: {str(e)}")
-    
-    async def check_food_saved(self, uid: str, food_id: str) -> bool:
-        """특정 음식이 사용자에게 저장되어 있는지 확인합니다."""
-        try:
-            saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(food_id)
-            doc = saved_food_ref.get()
-            
-            return doc.exists
-            
-        except Exception as e:
-            logger.error(f"음식 저장 여부 확인 실패: {str(e)}")
-            return False
-    
-    async def get_saved_food_document_info(self, uid: str, food_id: str) -> Dict[str, Any]:
-        """특정 저장된 음식 문서의 상세 정보를 조회합니다 (디버깅용)"""
-        try:
-            saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(food_id)
-            doc = saved_food_ref.get()
-            
-            if not doc.exists:
-                return {"exists": False, "message": "문서가 존재하지 않습니다."}
-            
-            data = doc.to_dict()
-            return {
-                "exists": True,
-                "id": doc.id,
-                "path": doc.reference.path,
-                "data": data,
-                "createTime": doc.create_time.isoformat() if hasattr(doc, 'create_time') else None,
-                "updateTime": doc.update_time.isoformat() if hasattr(doc, 'update_time') else None
-            }
-            
-        except Exception as e:
-            logger.error(f"문서 정보 조회 실패: {str(e)}")
-            return {"exists": False, "error": str(e)}
-    
-    # ==================== 사용자 통계 및 분석 ====================
-    
-    # MVP 단계에서는 사용하지 않음 - 나중에 필요시 주석 해제
-    # async def get_user_stats(self, uid: str) -> Dict[str, Any]:
-    #     """사용자의 통계 정보를 조회합니다."""
-    #     try:
-    #         # 저장된 음식 수
-    #         saved_foods_ref = self.db.collection('users').document(uid).collection('saved_foods')
-    #         saved_count = len(list(saved_foods_ref.stream()))
-    #         
-    #         # 사용자 프로필 정보
-    #         user_profile = await self.get_user_profile(uid)
-    #         
-    #         stats = {
-    #             "uid": uid,
-    #             "savedFoodsCount": saved_count,
-    #             "profile": user_profile.model_dump() if user_profile else None,
-    #             "lastActivity": user_profile.updatedAt if user_profile else None
-    #         }
-    #         
-    #         return stats
-    #         
-    #     except Exception as e:
-    #         logger.error(f"사용자 통계 조회 실패: {str(e)}")
-    #         raise Exception(f"사용자 통계 조회 중 오류 발생: {str(e)}")
 
 # 서비스 인스턴스 생성
 user_service = UserService()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
-    """Firebase 토큰을 검증하고 현재 사용자 정보를 반환합니다."""
+    """
+    Firebase 토큰을 검증하고 현재 사용자 정보를 반환
+    
+    Args:
+        credentials (HTTPAuthorizationCredentials): HTTP Bearer 토큰
+        
+    Returns:
+        Optional[dict]: 사용자 정보 또는 None
+        
+    Raises:
+        HTTPException: 토큰 검증 실패 시
+    """
     token = credentials.credentials
     is_emulator = bool(os.getenv("FIREBASE_AUTH_EMULATOR_HOST"))
 
     try:
         # 에뮬레이터 토큰은 check_revoked/issuer 검사를 끄는 게 안전
-        decoded = fb_auth.verify_id_token(token, check_revoked=not is_emulator)
+        decoded = auth.verify_id_token(token, check_revoked=not is_emulator)
 
         user_info = {
             "uid": decoded["uid"],
@@ -403,7 +480,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return user_info
 
     except Exception as e:
-        # 디버깅을 위해 에뮬레이터/실서버 상태와 함께 로깅 -> 지금 에뮬레이터 X
         logger.error(f"[auth] verify_id_token 실패 (emulator={is_emulator}): {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

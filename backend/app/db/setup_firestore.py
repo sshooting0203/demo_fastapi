@@ -1,4 +1,10 @@
 from datetime import datetime
+from dotenv import load_dotenv
+import os
+
+# .env 파일 로드 (루트 디렉토리의 .env 파일)
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
+
 from .firestore_client import firestore_client
 
 # Firestore 클라이언트 가져오기
@@ -199,169 +205,8 @@ dietaryRestrictions = {
     }
 }
 
-# 국가별 상위 음식 순위 데이터 (검색 횟수 기준)
-countryFoodRanking = {
-    "JP": {
-        "countryCode": "JP",
-        "countryName": "일본",
-        "topFoods": [
-        { "foodId": "JP_sushi", "foodName": "초밥", "searchCount": 320, "saveCount": 210 },
-        { "foodId": "JP_ramen", "foodName": "라멘", "searchCount": 295, "saveCount": 185 },
-        { "foodId": "JP_tonkatsu", "foodName": "돈카츠", "searchCount": 248, "saveCount": 156 },
-        { "foodId": "JP_tempura", "foodName": "덴푸라", "searchCount": 231, "saveCount": 143 },
-        { "foodId": "JP_udon", "foodName": "우동", "searchCount": 214, "saveCount": 128 },
-        { "foodId": "JP_gyoza", "foodName": "교자", "searchCount": 198, "saveCount": 119 },
-        { "foodId": "JP_okonomiyaki", "foodName": "오코노미야키", "searchCount": 184, "saveCount": 108 },
-        { "foodId": "JP_yakitori", "foodName": "야키토리", "searchCount": 169, "saveCount": 97 },
-        { "foodId": "JP_curry", "foodName": "일본식 카레", "searchCount": 156, "saveCount": 88 },
-        { "foodId": "JP_soba", "foodName": "소바", "searchCount": 141, "saveCount": 79 }
-        ]
-    },
-    "KR": {
-        "countryCode": "KR",
-        "countryName": "한국",
-        "topFoods": [
-        { "foodId": "KR_bibimbap", "foodName": "비빔밥", "searchCount": 260, "saveCount": 164 },
-        { "foodId": "KR_bulgogi", "foodName": "불고기", "searchCount": 244, "saveCount": 152 },
-        { "foodId": "KR_kimchi", "foodName": "김치", "searchCount": 228, "saveCount": 138 },
-        { "foodId": "KR_japchae", "foodName": "잡채", "searchCount": 212, "saveCount": 126 },
-        { "foodId": "KR_samgyeopsal", "foodName": "삼겹살", "searchCount": 196, "saveCount": 115 },
-        { "foodId": "KR_tteokbokki", "foodName": "떡볶이", "searchCount": 183, "saveCount": 105 },
-        { "foodId": "KR_kimchijjigae", "foodName": "김치찌개", "searchCount": 171, "saveCount": 96 },
-        { "foodId": "KR_naengmyeon", "foodName": "비빔냉면", "searchCount": 159, "saveCount": 88 },
-        { "foodId": "KR_sundubu", "foodName": "순두부찌개", "searchCount": 147, "saveCount": 80 },
-        { "foodId": "KR_galbi", "foodName": "갈비", "searchCount": 135, "saveCount": 72 }
-        ]
-    },
-    "US": {
-        "countryCode": "US",
-        "countryName": "미국",
-        "topFoods": [
-        { "foodId": "US_burger", "foodName": "햄버거", "searchCount": 305, "saveCount": 204 },
-        { "foodId": "US_pizza", "foodName": "피자", "searchCount": 287, "saveCount": 190 },
-        { "foodId": "US_hotdog", "foodName": "핫도그", "searchCount": 229, "saveCount": 140 },
-        { "foodId": "US_steak", "foodName": "스테이크", "searchCount": 251, "saveCount": 162 },
-        { "foodId": "US_friedchicken", "foodName": "프라이드치킨", "searchCount": 238, "saveCount": 151 },
-        { "foodId": "US_macncheese", "foodName": "맥앤치즈", "searchCount": 201, "saveCount": 120 },
-        { "foodId": "US_bbqribs", "foodName": "바비큐 립", "searchCount": 188, "saveCount": 112 },
-        { "foodId": "US_pancakes", "foodName": "팬케이크", "searchCount": 177, "saveCount": 104 },
-        { "foodId": "US_caesarsalad", "foodName": "시저샐러드", "searchCount": 162, "saveCount": 93 },
-        { "foodId": "US_clamchowder", "foodName": "클램차우더", "searchCount": 148, "saveCount": 85 }
-        ]
-    },
-    "CN": {
-        "countryCode": "CN",
-        "countryName": "중국",
-        "topFoods": [
-        { "foodId": "CN_dimsum", "foodName": "딤섬", "searchCount": 270, "saveCount": 158 },
-        { "foodId": "CN_kungpao", "foodName": "궁보계정", "searchCount": 256, "saveCount": 149 },
-        { "foodId": "CN_mapo", "foodName": "마파두부", "searchCount": 231, "saveCount": 136 },
-        { "foodId": "CN_xiaolongbao", "foodName": "샤오롱바오", "searchCount": 218, "saveCount": 128 },
-        { "foodId": "CN_pekingduck", "foodName": "북경오리", "searchCount": 205, "saveCount": 121 },
-        { "foodId": "CN_friedrice", "foodName": "볶음밥", "searchCount": 192, "saveCount": 112 },
-        { "foodId": "CN_chowmein", "foodName": "차오메인", "searchCount": 179, "saveCount": 104 },
-        { "foodId": "CN_wontonsoup", "foodName": "완탕수프", "searchCount": 167, "saveCount": 96 },
-        { "foodId": "CN_sweetsourpork", "foodName": "탕수육", "searchCount": 155, "saveCount": 88 },
-        { "foodId": "CN_maponoodles", "foodName": "탄탄면", "searchCount": 143, "saveCount": 80 }
-        ]
-    },
-    "TH": {
-        "countryCode": "TH",
-        "countryName": "태국",
-        "topFoods": [
-        { "foodId": "TH_padthai", "foodName": "팟타이", "searchCount": 258, "saveCount": 152 },
-        { "foodId": "TH_tomyum", "foodName": "똠얌", "searchCount": 236, "saveCount": 139 },
-        { "foodId": "TH_greencurry", "foodName": "그린커리", "searchCount": 214, "saveCount": 127 },
-        { "foodId": "TH_massaman", "foodName": "마사만커리", "searchCount": 198, "saveCount": 118 },
-        { "foodId": "TH_somtam", "foodName": "솜탐", "searchCount": 183, "saveCount": 108 },
-        { "foodId": "TH_larb", "foodName": "랍", "searchCount": 169, "saveCount": 99 },
-        { "foodId": "TH_padkrapao", "foodName": "팟끄라파오", "searchCount": 157, "saveCount": 92 },
-        { "foodId": "TH_mangostickyrice", "foodName": "망고 스티키 라이스", "searchCount": 146, "saveCount": 86 },
-        { "foodId": "TH_redcurry", "foodName": "레드커리", "searchCount": 135, "saveCount": 79 },
-        { "foodId": "TH_tomkhagai", "foodName": "톰카가이", "searchCount": 124, "saveCount": 72 }
-        ]
-    },
-    "VN": {
-        "countryCode": "VN",
-        "countryName": "베트남",
-        "topFoods": [
-        { "foodId": "VN_pho", "foodName": "퍼(쌀국수)", "searchCount": 241, "saveCount": 145 },
-        { "foodId": "VN_banhmi", "foodName": "반미", "searchCount": 225, "saveCount": 135 },
-        { "foodId": "VN_springroll", "foodName": "스프링롤", "searchCount": 209, "saveCount": 126 },
-        { "foodId": "VN_bunbo", "foodName": "분보", "searchCount": 194, "saveCount": 116 },
-        { "foodId": "VN_comtam", "foodName": "껌떤", "searchCount": 180, "saveCount": 108 },
-        { "foodId": "VN_buncha", "foodName": "분짜", "searchCount": 167, "saveCount": 99 },
-        { "foodId": "VN_caolau", "foodName": "까오러우", "searchCount": 155, "saveCount": 92 },
-        { "foodId": "VN_banhxeo", "foodName": "반세오", "searchCount": 143, "saveCount": 84 },
-        { "foodId": "VN_cakhoto", "foodName": "까코또", "searchCount": 132, "saveCount": 78 },
-        { "foodId": "VN_bunrieu", "foodName": "분리우", "searchCount": 121, "saveCount": 71 }
-        ]
-    },
-    "ES": {
-        "countryCode": "ES",
-        "countryName": "스페인",
-        "topFoods": [
-        { "foodId": "ES_paella", "foodName": "파에야", "searchCount": 252, "saveCount": 160 },
-        { "foodId": "ES_tortilla", "foodName": "또르티야 에스파뇰라", "searchCount": 231, "saveCount": 146 },
-        { "foodId": "ES_jamon", "foodName": "하몬", "searchCount": 215, "saveCount": 134 },
-        { "foodId": "ES_gazpacho", "foodName": "가스파초", "searchCount": 199, "saveCount": 123 },
-        { "foodId": "ES_churros", "foodName": "추로스", "searchCount": 186, "saveCount": 114 },
-        { "foodId": "ES_patatasbravas", "foodName": "파타타스 브라바스", "searchCount": 172, "saveCount": 105 },
-        { "foodId": "ES_croquetas", "foodName": "크로케타", "searchCount": 159, "saveCount": 96 },
-        { "foodId": "ES_fabada", "foodName": "파바다", "searchCount": 146, "saveCount": 88 },
-        { "foodId": "ES_pulpo", "foodName": "문어요리(풀포)", "searchCount": 134, "saveCount": 80 },
-        { "foodId": "ES_ensaladarusa", "foodName": "엔살라다 루사", "searchCount": 123, "saveCount": 74 }
-        ]
-    },
-    "IT": {
-        "countryCode": "IT",
-        "countryName": "이탈리아",
-        "topFoods": [
-        { "foodId": "IT_pizzamargherita", "foodName": "피자 마르게리타", "searchCount": 310, "saveCount": 205 },
-        { "foodId": "IT_carbonara", "foodName": "카르보나라", "searchCount": 289, "saveCount": 192 },
-        { "foodId": "IT_lasagna", "foodName": "라자냐", "searchCount": 266, "saveCount": 178 },
-        { "foodId": "IT_risotto", "foodName": "리소토", "searchCount": 242, "saveCount": 162 },
-        { "foodId": "IT_tiramisu", "foodName": "티라미수", "searchCount": 225, "saveCount": 149 },
-        { "foodId": "IT_bruschetta", "foodName": "브루스케타", "searchCount": 209, "saveCount": 138 },
-        { "foodId": "IT_gnocchi", "foodName": "뇨키", "searchCount": 193, "saveCount": 127 },
-        { "foodId": "IT_ossobuco", "foodName": "오소부코", "searchCount": 178, "saveCount": 118 },
-        { "foodId": "IT_minestrone", "foodName": "미네스트로네", "searchCount": 164, "saveCount": 108 },
-        { "foodId": "IT_trofiepesto", "foodName": "트로피에 알 페스토", "searchCount": 151, "saveCount": 99 }
-        ]
-    },
-    "FR": {
-        "countryCode": "FR",
-        "countryName": "프랑스",
-        "topFoods": [
-        { "foodId": "FR_coqauvin", "foodName": "꼬코뱅", "searchCount": 238, "saveCount": 150 },
-        { "foodId": "FR_ratatouille", "foodName": "라따뚜이", "searchCount": 222, "saveCount": 141 },
-        { "foodId": "FR_bouillabaisse", "foodName": "부야베스", "searchCount": 207, "saveCount": 131 },
-        { "foodId": "FR_quichelorraine", "foodName": "키슈 로렌", "searchCount": 194, "saveCount": 123 },
-        { "foodId": "FR_steakfrites", "foodName": "스테이크 프리츠", "searchCount": 181, "saveCount": 115 },
-        { "foodId": "FR_croquemonsieur", "foodName": "크로크 무슈", "searchCount": 169, "saveCount": 107 },
-        { "foodId": "FR_crepe", "foodName": "크레페", "searchCount": 158, "saveCount": 100 },
-        { "foodId": "FR_cassoulet", "foodName": "카슐레", "searchCount": 146, "saveCount": 92 },
-        { "foodId": "FR_nicoisesalad", "foodName": "니수아즈 샐러드", "searchCount": 135, "saveCount": 85 },
-        { "foodId": "FR_boeufbourguignon", "foodName": "뵈프 부르기뇽", "searchCount": 124, "saveCount": 78 }
-        ]
-    },
-    "MX": {
-        "countryCode": "MX",
-        "countryName": "멕시코",
-        "topFoods": [
-        { "foodId": "MX_tacosalpastor", "foodName": "타코 알 파스토르", "searchCount": 246, "saveCount": 156 },
-        { "foodId": "MX_enchiladas", "foodName": "엔칠라다", "searchCount": 228, "saveCount": 144 },
-        { "foodId": "MX_guacamole", "foodName": "과카몰리", "searchCount": 212, "saveCount": 133 },
-        { "foodId": "MX_chilaquiles", "foodName": "칠라킬레스", "searchCount": 197, "saveCount": 124 },
-        { "foodId": "MX_tamales", "foodName": "타말", "searchCount": 183, "saveCount": 115 },
-        { "foodId": "MX_molepoblano", "foodName": "몰레 포블라노", "searchCount": 170, "saveCount": 107 },
-        { "foodId": "MX_quesadilla", "foodName": "케사디야", "searchCount": 158, "saveCount": 99 },
-        { "foodId": "MX_pozole", "foodName": "포졸레", "searchCount": 146, "saveCount": 92 },
-        { "foodId": "MX_elote", "foodName": "엘로테", "searchCount": 135, "saveCount": 84 },
-        { "foodId": "MX_ceviche", "foodName": "세비체", "searchCount": 124, "saveCount": 78 }
-        ]
-    }
-}
+# 국가별 상위 음식 순위 데이터 (검색 횟수 기준) - 삭제됨
+# countryFoodRanking = { ... } - 전체 데이터 삭제
 
 
 # 더미 사용자 데이터 제거 - seed_dummy_firestore.py에서 처리
@@ -387,12 +232,6 @@ def setup_firestore():
     for dietary_code, data in dietaryRestrictions.items():
         db.collection('dietaryRestrictions').document(dietary_code).set(data)
         print(f"   - {dietary_code}: {data['label']} 생성 완료")
-    
-    # 4. 국가별 상위 음식 순위 데이터 생성
-    print("4. 국가별 상위 음식 순위 데이터 생성 중")
-    for country_code, data in countryFoodRanking.items():
-        db.collection('countryFoodRanking').document(country_code).set(data)
-        print(f"   - {country_code}: {data['countryName']} 상위 음식 생성 완료")
 
     print("Firestore 초기 설정 완료 (참조용 데이터)")
 

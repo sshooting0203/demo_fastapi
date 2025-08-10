@@ -5,6 +5,7 @@ from .food import FoodInfo
 
 # 간단한 검색 요청 모델 (언어 선택 + 국가)
 class SimpleSearchRequest(BaseModel):
+    query: str = Field(..., description="검색할 음식명 (OCR/번역 결과)")
     source_language: str = Field(..., description="원본 언어 코드 (예: ja)")
     target_language: str = Field(..., description="번역할 언어 코드 (예: ko)")
     country: Optional[str] = Field(None, description="국가 코드 (예: JP)")
@@ -12,6 +13,7 @@ class SimpleSearchRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
+                "query": "초밥",
                 "source_language": "ja",
                 "target_language": "ko",
                 "country": "JP"
