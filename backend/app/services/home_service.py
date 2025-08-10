@@ -53,7 +53,7 @@ class HomeService:
         """국가명(ex 한국)으로 국가코드(ex KR) 조회"""
         try:
             # countries 컬렉션에서 국가명으로 검색
-            countries_ref = firestore_client.db.collection("countries")
+            countries_ref = firestore_client.db.collection("country")
             query = countries_ref.where("nameKo", "==", country_name).limit(1)
             docs = query.get()
             
@@ -98,7 +98,7 @@ class HomeService:
             
             if travel_country:
                 # 국가 정보 조회
-                country_doc = firestore_client.db.collection("countries").document(travel_country).get()
+                country_doc = firestore_client.db.collection("country").document(travel_country).get()
                 if country_doc.exists:
                     country_data = country_doc.to_dict()
                     return {

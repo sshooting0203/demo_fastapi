@@ -2,6 +2,9 @@ from firebase_admin import firestore
 from datetime import datetime, timedelta
 from typing import List, Optional
 from app.models.ranking import CountryRanking, TopFoodSnapshot
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RankingService:
     def __init__(self):
@@ -15,6 +18,8 @@ class RankingService:
             
             if not ranking_doc.exists:
                 return []
+            
+            logging.info('ranking_doc : %s', ranking_doc)
             
             ranking_data = ranking_doc.to_dict()
             top_foods = ranking_data.get('topFoods', [])

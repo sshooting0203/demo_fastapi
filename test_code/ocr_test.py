@@ -3,7 +3,7 @@ import requests
 BASE = "http://127.0.0.1:8000"
 
 def test_with_file():
-    path = "C:\\Users\\sshl5\\IdeaProjects\\unithon-backend\\backend\\app\\ai\\test_img\\image2.png"
+    path = "C:\\Users\\sshl5\\IdeaProjects\\unithon-backend\\backend\\app\\ai\\test_img\\image6.png"
 
     files = {
         "file": (path, open(path, "rb"), "image/jpeg")
