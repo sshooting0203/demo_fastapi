@@ -21,7 +21,7 @@ from firebase_admin import auth, firestore
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/food", tags=["ai를 사용하여 음식에 대한 ocr, translate, analyze"])
+router = APIRouter(prefix="/api/ai", tags=["ai를 사용하여 음식에 대한 ocr, translate, analyze"])
 
 ALLOWED_CT = {"image/png", "image/jpeg"} # 이미지 허용 포맷 
 MAX_BYTES = 5 * 1024 * 1024  # 이미지 최대 허용 크기5MB
