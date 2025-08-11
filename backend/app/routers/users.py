@@ -47,23 +47,38 @@ async def get_my_saved_foods(current_user: dict = Depends(get_current_user)):
         return saved_foods
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"저장된 음식 조회 중 오류: {str(e)}")
+        
 
-
-'''
-# ai 부분에서 추가하도록
 @router.post("/me/saved-foods", response_model=SavedFood)
 async def save_food_to_my_list(
     save_request: SaveFoodRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """음식 저장"""
+    """AI 분석 결과를 사용자가 선택해서 저장"""
     try:
         uid = current_user["uid"]
-        saved_food = await user_service.save_food(uid, save_request)
-        return saved_food
+        
+        # AI 분석 결과를 더미데이터 형식에 맞게 변환
+        # savedAt은 서버에서 자동 설정
+        from datetime import datetime
+        
+        # SavedFood 모델 생성 (더미데이터 형식과 동일)
+        saved_food = SavedFood(
+            id=save_request.foodId,  # 예: "JP_tonkatsu"
+            userImageUrl=save_request.userImageUrl,
+            foodInfo=save_request.foodInfo,  # AI 분석 결과 그대로 저장
+            restaurantName=save_request.restaurantName,
+            savedAt=datetime.now()  # 현재 시간으로 자동 설정
+        )
+        
+        # user_service를 통해 저장 (메타데이터 업데이트 포함)
+        saved_food_result = await user_service.save_food(uid, save_request)
+        
+        # 저장된 음식 반환
+        return saved_food_result
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"음식 저장 중 오류: {str(e)}")
-'''
 
 @router.delete("/me/saved-foods")
 async def delete_my_saved_foods(

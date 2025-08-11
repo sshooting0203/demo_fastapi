@@ -83,36 +83,3 @@ async def read_image_bytes(file: Optional[UploadFile], image_url: Optional[str])
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Image too large (max 5MB).")
     return data
-
-# 음식 저장 여기로 추가
-# 무조건 ai 검색 후 저장 가능하니
-async def increase_save_count(self, uid: str) -> bool:
-    """사용자의 저장횟수 증가"""
-    try:
-        user_ref = self.db.collection('users').document(uid)
-        
-        @firestore.transactional
-        def update_save_count(transaction, user_ref):
-            user_doc = user_ref.get(transaction=transaction)
-            if not user_doc.exists:
-                raise Exception(f"사용자를 찾을 수 없습니다: {uid}")
-            
-            current_save_count = user_doc.to_dict().get('saveCount', 0)
-            new_save_count = current_save_count + 1
-            
-            transaction.update(user_ref, {
-                'saveCount': new_save_count,
-                'updatedAt': datetime.now()
-            })
-            
-            return new_save_count
-        
-        transaction = self.db.transaction()
-        new_count = update_save_count(transaction, user_ref)
-        
-        logger.info(f"사용자 {uid}의 저장횟수 증가: {new_count}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"저장횟수 증가 실패: {str(e)}")
-        return False
