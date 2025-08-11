@@ -7,6 +7,10 @@ from typing import Optional
 router = APIRouter(prefix="/api/foods", tags=["음식"])
 search_service = SearchService()
 
+# 여긴 ai 코드 작성 전에 임의로 작성함 (번역 받을 언어, 할 언어와 결과 담아야 함)
+# ocr-translate 로 처리가 완료되는 것 같아 삭제함
+
+'''
 @router.post("/interpret", response_model=SimpleSearchResponse)
 async def interpret_food(
     request: SimpleSearchRequest,
@@ -22,3 +26,5 @@ async def interpret_food(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+'''

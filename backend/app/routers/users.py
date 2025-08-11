@@ -49,6 +49,8 @@ async def get_my_saved_foods(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"저장된 음식 조회 중 오류: {str(e)}")
 
 
+'''
+# ai 부분에서 추가하도록
 @router.post("/me/saved-foods", response_model=SavedFood)
 async def save_food_to_my_list(
     save_request: SaveFoodRequest,
@@ -61,7 +63,7 @@ async def save_food_to_my_list(
         return saved_food
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"음식 저장 중 오류: {str(e)}")
-
+'''
 
 @router.delete("/me/saved-foods")
 async def delete_my_saved_foods(

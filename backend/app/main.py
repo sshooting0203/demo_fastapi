@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv() #위에 있어야 오류x
 
 from fastapi import FastAPI
-from .routers import home, users, foods, auth
+from .routers import home, users, foods, auth, ai
 
 app = FastAPI()
 
@@ -10,7 +10,9 @@ app = FastAPI()
 app.include_router(auth.router)
 app.include_router(home.router)
 app.include_router(users.router)
-app.include_router(foods.router)
+# app.include_router(foods.router) 
+# -> ai.router 에서 처리하는 듯해 삭제(ai 코드 작성 전 임의로 작성한 코드)
+app.include_router(ai.router) 
 
 @app.get("/", tags=["루트"])
 async def root():

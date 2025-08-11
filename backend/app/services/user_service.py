@@ -301,80 +301,79 @@ class UserService:
             logger.error(f"저장된 음식 조회 실패: {str(e)}")
             raise Exception(f"저장된 음식 조회 중 오류 발생: {str(e)}")
     
+
+    ############## 여기 로직은 좀 더 고민민
     async def _update_food_save_count(self, food_info: FoodInfo):
-        """
-        음식 저장 시 메타데이터의 저장 횟수 업데이트
-        메타데이터가 없으면 새로 생성
-        
-        Args:
-            food_info (FoodInfo): 음식 정보
-        """
+        """음식 저장 시 메타데이터의 저장 횟수 업데이트 (없으면 생성)"""
         try:
-            # 문서 ID 생성 (country_dishName 형태)
-            doc_id = f"{food_info.country}_{food_info.dishName}"
+            # 문서명 생성: 나라코드_음식영문명
+            doc_name = f"{food_info.country}_{food_info.foodName}"
             
-            # 기존 메타데이터 확인
-            metadata_ref = self.db.collection('food_metadata').document(doc_id)
-            doc = metadata_ref.get()
+            # 메타데이터 참조
+            meta_ref = self.db.collection('food_metadata').document(doc_name)
+            
+            # 현재 문서 확인
+            doc = meta_ref.get()
             
             if doc.exists:
-                # 기존 메타데이터가 있으면 저장 횟수 증가
-                metadata_ref.update({
-                    'saveCount': firestore.Increment(1),
-                    'updatedAt': datetime.now().isoformat()
+                # 기존 문서: 저장 횟수 증가
+                current_count = doc.to_dict().get('saveCount', 0)
+                meta_ref.update({
+                    'saveCount': current_count + 1,
+                    'lastSavedAt': datetime.now()
                 })
-                logger.info(f"음식 저장 횟수 업데이트 완료: {doc_id}")
             else:
-                # 메타데이터가 없으면 새로 생성
-                metadata = {
+                # 새 문서 생성
+                meta_ref.set({
                     'country': food_info.country,
                     'foodName': food_info.foodName,
-                    'dishName': food_info.dishName,
-                    'searchCount': 0,  # 검색 횟수
-                    'saveCount': 1,    # 저장 횟수 (최초 저장이므로 1)
-                    'lastSearched': None,  # 마지막 검색 시간
-                    'updatedAt': datetime.now().isoformat()
-                }
+                    'saveCount': 1,
+                    'searchCount': 1,  # 검색 횟수도 초기화
+                    'createdAt': datetime.now(),
+                    'lastSavedAt': datetime.now()
+                })
                 
-                metadata_ref.set(metadata)
-                logger.info(f"새로운 음식 메타데이터 생성 완료: {doc_id}")
-                
-        except Exception as e:
-            logger.error(f"음식 저장 횟수 업데이트 실패: {str(e)}")
-    
-    async def _decrease_food_save_count(self, food_info: FoodInfo):
-        """
-        음식 삭제 시 메타데이터의 저장 횟수 감소
-        
-        Args:
-            food_info (FoodInfo): 음식 정보
-        """
-        try:
-            # 문서 ID 생성 (country_dishName 형태)
-            doc_id = f"{food_info.country}_{food_info.dishName}"
+            logger.info(f"메타데이터 저장 횟수 증가: {doc_name}")
             
-            # 메타데이터에서 저장 횟수 감소
-            metadata_ref = self.db.collection('food_metadata').document(doc_id)
-            doc = metadata_ref.get()
+        except Exception as e:
+            logger.error(f"메타데이터 업데이트 실패: {str(e)}")
+            # 에러가 있어도 음식 저장은 계속 진행
+    
+    async def increase_search_count(self, food_info: FoodInfo):
+        """음식 검색 시 메타데이터 검색 횟수 증가 (없으면 생성)"""
+        try:
+            # 문서명 생성: 나라코드_음식영문명
+            doc_name = f"{food_info.country}_{food_info.foodName}"
+            
+            # 메타데이터 참조
+            meta_ref = self.db.collection('food_metadata').document(doc_name)
+            
+            # 현재 문서 확인
+            doc = meta_ref.get()
             
             if doc.exists:
-                data = doc.to_dict()
-                current_save_count = data.get('saveCount', 0)
-                
-                if current_save_count > 0:
-                    # 저장 횟수 감소
-                    metadata_ref.update({
-                        'saveCount': current_save_count - 1,
-                        'updatedAt': datetime.now().isoformat()
-                    })
-                    logger.info(f"음식 저장 횟수 감소 완료: {doc_id} (현재: {current_save_count - 1})")
-                else:
-                    logger.warning(f"저장 횟수가 이미 0입니다: {doc_id}")
+                # 기존 문서: 검색 횟수 증가
+                current_count = doc.to_dict().get('searchCount', 0)
+                meta_ref.update({
+                    'searchCount': current_count + 1,
+                    'lastSearchedAt': datetime.now()
+                })
             else:
-                logger.warning(f"메타데이터를 찾을 수 없습니다: {doc_id}")
+                # 새 문서 생성
+                meta_ref.set({
+                    'country': food_info.country,
+                    'foodName': food_info.foodName,
+                    'searchCount': 1,
+                    'saveCount': 0,  # 저장 횟수도 초기화
+                    'createdAt': datetime.now(),
+                    'lastSearchedAt': datetime.now()
+                })
                 
+            logger.info(f"메타데이터 검색 횟수 증가: {doc_name}")
+            
         except Exception as e:
-            logger.error(f"음식 저장 횟수 감소 실패: {str(e)}")
+            logger.error(f"메타데이터 업데이트 실패: {str(e)}")
+            # 에러가 있어도 AI 분석은 계속 진행
     
     async def delete_saved_foods(self, uid: str, delete_request: DeleteSavedFoodsRequest) -> Dict[str, Any]:
         """
