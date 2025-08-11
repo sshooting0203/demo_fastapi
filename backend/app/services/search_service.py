@@ -295,6 +295,30 @@ class SearchService:
             food_ingredients = data.get('ingredients', [])
             dietary_warnings = []
             
+            # 한국어 재료를 영어 코드로 변환하는 간단한 매핑
+            # 이건 지금 시간 상 이렇게 매핑해서 처리함 -> 진짜 처리를 원하면 LLM 단에서 처리해야 할 듯?
+            def convert_korean_to_english(ingredient):
+                ingredient_lower = ingredient.lower()
+                if any(word in ingredient_lower for word in ['계란', '달걀']):
+                    return 'EGG'
+                elif any(word in ingredient_lower for word in ['우유', '버터', '크림', '치즈', '유제품']):
+                    return 'MILK'
+                elif any(word in ingredient_lower for word in ['밀가루', '밀', '빵']):
+                    return 'WHEAT'
+                elif any(word in ingredient_lower for word in ['소고기', '쇠고기']):
+                    return 'BEEF'
+                elif any(word in ingredient_lower for word in ['돼지고기', '돼지']):
+                    return 'PORK'
+                elif any(word in ingredient_lower for word in ['닭고기', '닭']):
+                    return 'CHICKEN'
+                elif any(word in ingredient_lower for word in ['새우']):
+                    return 'SHRIMP'
+                elif any(word in ingredient_lower for word in ['땅콩']):
+                    return 'PEANUT'
+                elif any(word in ingredient_lower for word in ['콩', '대두', '두부']):
+                    return 'SOY'
+                return None
+            
             # Firestore에서 사용자의 dietaryRestrictions에 해당하는 restrictedFoods 가져오기
             for restriction_code in user_dietary:
                 doc = await self._get_document_case_insensitive('dietaryRestrictions', restriction_code)
@@ -304,12 +328,16 @@ class SearchService:
                     
                     logger.info(f"식단제한 {restriction_code}: 제한된 음식 {restricted_foods}")
                     
-                    # 제한된 음식과 음식 성분 비교
-                    for restricted_food in restricted_foods:
-                        for ingredient in food_ingredients:
-                            if restricted_food.lower() in ingredient.lower():
-                                dietary_warnings.append(ingredient)
-                                logger.info(f"식단제한 경고: {restriction_code} - {restricted_food} → {ingredient}")
+                    # 한국어 재료를 영어로 변환한 후 제한된 음식과 비교
+                    for ingredient in food_ingredients:
+                        english_code = convert_korean_to_english(ingredient)
+                        if english_code and english_code in restricted_foods:
+                            dietary_warnings.append(ingredient)
+                            logger.info(f"식단제한 경고: {restriction_code} - {english_code} → {ingredient}")
+                        # 이미 영어 코드인 경우도 체크
+                        elif ingredient.upper() in restricted_foods:
+                            dietary_warnings.append(ingredient)
+                            logger.info(f"식단제한 경고: {restriction_code} - {ingredient} → {ingredient}")
             
             # 3단계: 간단한 경고 메시지 생성 -> 이거 프론트 단에서 경고 로그 찍기 편할 거라 생각해 ...
             allergy_message = ""
