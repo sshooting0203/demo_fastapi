@@ -61,14 +61,14 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     "recommendations": ["{target_lang_code} ..."],
     "culturalBackground": "<{target_lang_code} 2 sentences>"
     }}
-
-    User constraints:
-    - allergies: {", ".join(allergies) if allergies else "none"}
-    - religion/diet: {religion or "none"}
     Country constraints:
     - This dish is likely from {country_hint} (cuisine_country_code).
     - This dish is NOT from {target_lang_code} (cuisine_country_code).
     """.strip()
+
+    # User constraints:
+    # - allergies: {", ".join(allergies) if allergies else "none"}
+    # - religion/diet: {religion or "none"}
 
 def safe_load_json(text: str) -> Dict:
     t = text.strip()
