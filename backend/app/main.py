@@ -3,6 +3,7 @@ load_dotenv() #위에 있어야 오류x
 
 from fastapi import FastAPI
 from .routers import home, users, auth, ai
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
@@ -11,6 +12,13 @@ app.include_router(auth.router)
 app.include_router(home.router)
 app.include_router(users.router)
 app.include_router(ai.router) 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # 프론트 도메인
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/", tags=["루트"])
 async def root():
