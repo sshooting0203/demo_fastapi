@@ -21,7 +21,6 @@ async def get_home_data(current_user: dict = Depends(get_current_user)):
 
         # 홈 서비스에서 통합 데이터 조회
         home_data = await home_service.get_home_data(uid, user_info)
-        
         return {"success": True, **home_data}
 
     except Exception as e:

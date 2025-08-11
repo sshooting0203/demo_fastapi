@@ -276,7 +276,8 @@ class SearchService:
                 .where('country', '==', country)\
                 .order_by('searchCount', direction=firestore.Query.DESCENDING)\
                 .limit(limit)
-            
+            logging.info('query :  %s', query)
+
             docs = query.stream()
             top_foods = []
             
