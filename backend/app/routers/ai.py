@@ -26,13 +26,86 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
     uid = current_user["uid"]
     user = await user_service.get_user_profile(uid)  #여기 수정(변경됨)
     cons = extract_user_constraints(user or {})
+    
+    logger.info(f"음식 분석 요청 시작: {req.food_name} (국가: {req.country})")
 
     try:
+        # 1단계: 기존 검색 결과에서 동일한 쿼리 확인
+        from app.services.search_service import search_service
+        
+        logger.info(f"기존 검색 결과 확인 중...")
+        # OCR/번역된 원어 음식명으로 기존 결과 검색
+        existing_result = await search_service.find_existing_search_result(
+            query=req.food_name,  # 원어 음식명
+            country=req.country
+        )
+        
+        if existing_result:
+            logger.info(f"기존 검색 결과 발견! AI 분석 건너뜀: {existing_result['doc_id']}")
+            logger.info(f"기존 결과 데이터 구조: {existing_result['data']}")
+            
+            # 2단계: 사용자 정보로 개인화
+            personalized_result = await search_service.personalize_search_result(
+                search_result=existing_result['data'],
+                user_allergies=user.allergies if user else [],
+                user_dietary=user.dietaryRestrictions if user else []
+            )
+            
+            # 3단계: 검색 횟수만 증가 (AI 분석은 하지 않음)
+            # 기존 검색 결과에서 FoodInfo 객체 생성
+            from app.models.food import FoodInfo
+            
+            # 데이터 구조 확인 및 필수 필드 보완
+            food_data = existing_result['data']['data'].copy()
+            
+            # foodName이 없으면 foodName 필드에서 가져오기
+            if 'foodName' not in food_data and 'foodName' in existing_result['data']:
+                food_data['foodName'] = existing_result['data']['foodName']
+            
+            # 필수 필드가 없으면 기본값 설정
+            required_fields = ['foodName', 'dishName', 'country', 'summary', 'recommendations', 'ingredients', 'allergens']
+            for field in required_fields:
+                if field not in food_data:
+                    logger.warning(f"필수 필드 누락: {field}, 기본값 설정")
+                    if field == 'foodName':
+                        food_data[field] = existing_result['data'].get('foodName', '알 수 없는 음식')
+                    elif field == 'dishName':
+                        food_data[field] = existing_result['data'].get('dishName', '알 수 없는 음식')
+                    elif field == 'country':
+                        food_data[field] = existing_result['data'].get('country', 'UN')
+                    elif field in ['summary', 'recommendations', 'ingredients', 'allergens']:
+                        food_data[field] = []
+            
+            logger.info(f"FoodInfo 생성용 데이터: {food_data}")
+            existing_food_info = FoodInfo(**food_data)
+            
+            # 개인화된 정보 반영 (안전한 추천 항목 등)
+            if personalized_result.get('personalized', {}).get('safe_recommendations'):
+                existing_food_info.recommendations = personalized_result['personalized']['safe_recommendations']
+            
+            await user_service.increase_search_count(existing_food_info)
+            
+            # 4단계: 개인화된 결과 반환
+            logger.info(f"기존 결과 + 개인화 완료 (AI 분석 없음)")
+            return AnalyzeOneResponse(
+                data=existing_food_info,
+                is_from_cache=True,
+                personalized_info=personalized_result.get('personalized', {})
+            )
+        
+        # 기존 결과가 없으면 AI 분석 진행
+        logger.info(f"기존 검색 결과 없음, AI 분석 시작: {req.food_name}")
         data = await analyze_one_async(cons, req)
-        # logging.info("data results : %s", data)
+        
+        # 검색 결과 저장
+        await search_service._save_search_result(uid, req.food_name, f"{data.country}_{data.foodName}", data)
+        
+        # 메타데이터 검색 횟수 증가
         await user_service.increase_search_count(data)
-        # 메타데이터 검색 횟수 증가 (저장은 안함)
-        return AnalyzeOneResponse(data=data)
+        
+        logger.info(f"AI 분석 완료. 새 결과 저장됨")
+        return AnalyzeOneResponse(data=data, is_from_cache=False)
+        
     except Exception as e:
         logger.exception("analyze-one failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

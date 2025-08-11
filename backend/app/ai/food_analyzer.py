@@ -195,7 +195,7 @@ async def analyze_one_async(
     try:
         uid = cons.get("uid")
         if uid:
-            # foodId를 {나라코드두글자}_{foodName} 형태로 생성
+            # foodId를 {나라코드두글자}_{원어} 형태로 생성
             food_id = f"{info.country}_{info.foodName}"
             await search_service._save_search_result(
                 uid=uid,

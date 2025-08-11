@@ -23,6 +23,36 @@ class SearchService:
     def __init__(self):
         self.db = firestore_client.db
     
+    async def _get_document_case_insensitive(self, collection_name: str, doc_id: str):
+        """
+        대소문자 구분 없이 Firestore 문서 조회
+        
+        Args:
+            collection_name (str): 컬렉션 이름
+            doc_id (str): 문서 ID
+            
+        Returns:
+            DocumentSnapshot: 찾은 문서 또는 None
+        """
+        try:
+            # 1. 정확한 ID로 먼저 시도
+            doc = self.db.collection(collection_name).document(doc_id).get()
+            if doc.exists:
+                return doc
+            
+            # 2. 대소문자 구분 없이 검색
+            docs = self.db.collection(collection_name).stream()
+            for doc in docs:
+                if doc.id.lower() == doc_id.lower():
+                    logger.info(f"대소문자 구분 없이 문서 발견: {collection_name}/{doc.id} (원본 ID: {doc_id})")
+                    return doc
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"문서 조회 실패: {collection_name}/{doc_id} - {str(e)}")
+            return None
+
     async def _save_search_result(self, uid: str, query: str, food_id: str, food_info: FoodInfo):
         """
         검색 결과를 Firestore에 저장 (AI 분석 결과 포함)
@@ -180,6 +210,138 @@ class SearchService:
         except Exception as e:
             logger.error(f"상위 음식 조회 오류: {str(e)}")
             return []
+
+    async def find_existing_search_result(self, query: str, country: str = None) -> Optional[Dict[str, Any]]:
+        """
+        기존 검색 결과에서 동일한 쿼리로 검색된 결과가 있는지 확인
+        
+        Args:
+            query (str): 검색 쿼리 (원어 음식명)
+            country (str, optional): 국가 코드 (필터링용)
+            
+        Returns:
+            Optional[Dict[str, Any]]: 기존 검색 결과 또는 None
+        """
+        try:
+            logger.info(f"기존 검색 결과 검색: 쿼리='{query}', 국가='{country}'")
+            
+            # query 필드로 검색 (대소문자 구분 없이)
+            query_ref = self.db.collection('search_results')
+            
+            if country:
+                # 국가별로 필터링하여 검색
+                logger.info(f"국가별 필터링 검색: {country}")
+                docs = query_ref.where('data.country', '==', country).stream()
+            else:
+                # 전체에서 검색
+                logger.info(f"전체 검색")
+                docs = query_ref.stream()
+            
+            # query와 정확히 일치하거나 유사한 결과 찾기
+            for doc in docs:
+                data = doc.to_dict()
+                stored_query = data.get('query', '').lower()
+                current_query = query.lower()
+                
+                logger.debug(f"검색된 문서: {doc.id}, 저장된 쿼리: '{stored_query}', 현재 쿼리: '{current_query}'")
+                
+                # 정확한 일치 또는 유사한 음식명 확인
+                if (stored_query == current_query or 
+                    stored_query in current_query or 
+                    current_query in stored_query):
+                    logger.info(f"기존 검색 결과 발견: {doc.id} (쿼리: '{stored_query}' vs '{current_query}')")
+                    return {
+                        'doc_id': doc.id,
+                        'data': data,
+                        'is_existing': True
+                    }
+            
+            logger.info(f"기존 검색 결과 없음: '{query}' (국가: {country})")
+            return None
+            
+        except Exception as e:
+            logger.error(f"기존 검색 결과 조회 실패: {str(e)}")
+            return None
+
+    async def personalize_search_result(self, search_result: Dict[str, Any], user_allergies: List[str], user_dietary: List[str]) -> Dict[str, Any]:
+        """
+        기존 검색 결과를 사용자 정보에 맞게 개인화
+        
+        Args:
+            search_result (Dict[str, Any]): 기존 검색 결과
+            user_allergies (List[str]): 사용자 알레르기 목록
+            user_dietary (List[str]): 사용자 식단 제한
+            
+        Returns:
+            Dict[str, Any]: 개인화된 검색 결과
+        """
+        try:
+            logger.info(f"개인화 시작 - 사용자 알레르기: {user_allergies}, 식단제한: {user_dietary}")
+            
+            personalized_result = search_result.copy()
+            data = search_result.get('data', {})
+            
+            # 1단계: 사용자 알레르기와 음식의 allergens 비교
+            food_allergens = data.get('allergens', [])
+            allergy_warnings = []
+            
+            for user_allergy in user_allergies:
+                for food_allergen in food_allergens:
+                    if user_allergy.lower() in food_allergen.lower():
+                        allergy_warnings.append(food_allergen)
+                        logger.info(f"알레르기 경고: {user_allergy} → {food_allergen}")
+            
+            # 2단계: 사용자 식단제한과 음식의 ingredients 비교
+            food_ingredients = data.get('ingredients', [])
+            dietary_warnings = []
+            
+            # Firestore에서 사용자의 dietaryRestrictions에 해당하는 restrictedFoods 가져오기
+            for restriction_code in user_dietary:
+                doc = await self._get_document_case_insensitive('dietaryRestrictions', restriction_code)
+                if doc:
+                    restriction_data = doc.to_dict()
+                    restricted_foods = restriction_data.get('restrictedFoods', [])
+                    
+                    logger.info(f"식단제한 {restriction_code}: 제한된 음식 {restricted_foods}")
+                    
+                    # 제한된 음식과 음식 성분 비교
+                    for restricted_food in restricted_foods:
+                        for ingredient in food_ingredients:
+                            if restricted_food.lower() in ingredient.lower():
+                                dietary_warnings.append(ingredient)
+                                logger.info(f"식단제한 경고: {restriction_code} - {restricted_food} → {ingredient}")
+            
+            # 3단계: 간단한 경고 메시지 생성 -> 이거 프론트 단에서 경고 로그 찍기 편할 거라 생각해 ...
+            allergy_message = ""
+            if allergy_warnings:
+                allergy_message = f"알러지 주의: {', '.join(set(allergy_warnings))}"
+            dietary_message = ""
+            if dietary_warnings:
+                dietary_message = f"제한 음식: {', '.join(set(dietary_warnings))}"
+            
+            # 4단계: 개인화된 정보 추가
+            personalized_result['personalized'] = {
+                'allergy_warnings': allergy_warnings,
+                'dietary_warnings': dietary_warnings,
+                'allergy_message': allergy_message,
+                'dietary_message': dietary_message,
+                'is_safe': len(allergy_warnings) == 0 and len(dietary_warnings) == 0,
+                'user_allergies': user_allergies,
+                'user_dietary': user_dietary
+            }
+            
+            logger.info(f"개인화 완료:")
+            if allergy_message:
+                logger.info(f"  {allergy_message}")
+            if dietary_message:
+                logger.info(f"  {dietary_message}")
+            logger.info(f"  안전 여부: {personalized_result['personalized']['is_safe']}")
+            
+            return personalized_result
+            
+        except Exception as e:
+            logger.error(f"검색 결과 개인화 실패: {str(e)}")
+            return search_result
 
 # 싱글톤 인스턴스
 search_service = SearchService()

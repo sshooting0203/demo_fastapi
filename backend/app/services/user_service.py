@@ -311,7 +311,7 @@ class UserService:
     async def _update_food_save_count(self, food_info: FoodInfo):
         """음식 저장 시 메타데이터의 저장 횟수 업데이트 (없으면 생성)"""
         try:
-            # 문서명 생성: 나라코드_음식영문명
+            # 문서명 생성: 나라코드_원어 (foodName 사용)
             doc_name = f"{food_info.country}_{food_info.foodName}"
             
             # 메타데이터 참조
@@ -332,6 +332,7 @@ class UserService:
                 meta_ref.set({
                     'country': food_info.country,
                     'foodName': food_info.foodName,
+                    'dishName': food_info.dishName,
                     'saveCount': 1,
                     'searchCount': 1,  # 검색 횟수도 초기화
                     'createdAt': datetime.now(),
@@ -347,7 +348,7 @@ class UserService:
     async def increase_search_count(self, food_info: FoodInfo):
         """음식 검색 시 메타데이터 검색 횟수 증가 (없으면 생성)"""
         try:
-            # 문서명 생성: 나라코드_음식영문명
+            # 문서명 생성: 나라코드_원어 (foodName 사용)
             doc_name = f"{food_info.country}_{food_info.foodName}"
             
             # 메타데이터 참조
