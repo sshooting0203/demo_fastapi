@@ -48,7 +48,13 @@ async def ocr_translate(
     target_language: str = Form(..., description="번역 대상 언어 코드(KR,EN)"),
     file: Optional[UploadFile] = File(None, description="이미지 파일 (multipart/form-data)"),
     image_url: Optional[str] = Form(None, description="이미지 URL"),
+    current_user: Optional[dict] = Depends(get_current_user)
 ) -> List[MenuItemOut] :
+    
+    uid = current_user.get('uid') if current_user else None
+    if uid is None: 
+        raise HTTPException(status_code=401, detail="User not registered")
+    
     try:
         data = await read_image_bytes(file, image_url)
         words, lang = detect_menu(data)

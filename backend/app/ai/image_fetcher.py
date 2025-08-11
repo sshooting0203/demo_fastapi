@@ -1,15 +1,26 @@
 # image_fetcher.py
-import re, time, random, asyncio
+import re, time, random, asyncio, os
 from typing import List, Optional, Iterable, Set
 from urllib.parse import urlencode, urlparse
+from dotenv import load_dotenv
 import aiohttp 
 # request(동) 쓰지 않고 aiohttp(비동기)
 from bs4 import BeautifulSoup
 
+load_dotenv()
+
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+UNSPLASH_ACCESS_KEY=os.getenv('UNSPLASH_ACCESS_KEY')
 
 def _h() -> dict:
     return {"User-Agent": _UA, "Accept-Language": "en-US,en;q=0.9"}
+
+def _h_api() -> dict:
+    return {
+        "Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}",
+        "Accept-Version": "v1",
+        "User-Agent": _UA,
+    }
 
 _BLOCKED = {
     "wikipedia.org", "wikimedia.org", "commons.wikimedia.org", "upload.wikimedia.org", "gstatic.com"
@@ -46,6 +57,7 @@ async def _is_image(session, u, timeout_sec=8.0):
             return r.status == 200 and ct.startswith("image/")
     except:
         return False
+
 
 # --- Bing 이미지 후보 수집 (murl만) ---
 _MURL_RE = re.compile(r'"murl":"(.*?)"')
@@ -92,6 +104,32 @@ async def _first_ok(session: aiohttp.ClientSession, urls: Iterable[str], concurr
         await asyncio.gather(*tasks, return_exceptions=True)
     return ""
 
+async def _unsplash_images(session: aiohttp.ClientSession, q: str, per_page: int = 10) -> List[str]:
+    if not UNSPLASH_ACCESS_KEY:
+        return []
+    params = {
+        "query": q,
+        "per_page": per_page,
+        "content_filter": "high",   # 성인/민감도 필터
+        "orientation": "landscape", # 음식 전시용 가로 이미지 선호 시
+    }
+    url = "https://api.unsplash.com/search/photos?" + urlencode(params)
+    try:
+        async with session.get(url, headers=_h_api(), timeout=aiohttp.ClientTimeout(total=8)) as resp:
+            if resp.status != 200:
+                return []
+            data = await resp.json()
+    except Exception:
+        return []
+
+    out: List[str] = []
+    for item in data.get("results", []):
+        # urls: raw, full, regular, small, thumb
+        u = item.get("urls", {}).get("regular") or item.get("urls", {}).get("full")
+        if u:
+            out.append(u)
+    return out
+
 async def fetch_dish_image_url_async(dish_name: str, country_hint: str=None, per_query_limit=6, validate_concurrency=12) -> str:
     queries = [dish_name]
     if country_hint:
@@ -112,3 +150,17 @@ async def fetch_dish_image_url_async(dish_name: str, country_hint: str=None, per
                     seen.add(u)
                     all_urls.append(u)
         return await _first_ok(session, all_urls, concurrency=validate_concurrency)
+
+    # async with aiohttp.ClientSession(
+    #     timeout=aiohttp.ClientTimeout(total=12),
+    #     connector=aiohttp.TCPConnector(limit=0),
+    # ) as session:
+    #     # 쿼리 우선순위를 지키기 위해 '순차'로 조회 후 첫 결과를 리턴
+    #     seen = set()  
+    #     for q in queries:
+    #         urls = await _unsplash_images(session, q, per_page=per_query_limit)  # List[str]
+    #         for u in urls:
+    #             if u and u not in seen:
+    #                 return u  # ← 첫 유효 이미지 URL만 리턴
+    #             seen.add(u)
+    # return ""
