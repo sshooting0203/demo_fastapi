@@ -7,6 +7,7 @@ from google import genai
 from app.ai.dto import AnalyzeOneRequest
 from app.ai.image_fetcher import fetch_dish_image_url_async
 from app.models.food import FoodInfo
+from app.services.search_service import search_service
 
 load_dotenv()
 
@@ -34,7 +35,8 @@ def extract_user_constraints(user_profile) -> Dict:
     allergies = user_profile.allergies if user_profile else []
     diet = user_profile.dietaryRestrictions if user_profile else None
     religion = ", ".join(diet) if isinstance(diet, list) else (diet or None)
-    return {"allergies": allergies, "religion": religion}
+    uid = user_profile.uid if user_profile else None
+    return {"allergies": allergies, "religion": religion, "uid": uid}
 
 def build_prompt(*, food_name: str, country_hint: str | None,
                  target_lang_code: str, allergies: List[str], religion: str | None) -> str:
@@ -188,4 +190,21 @@ async def analyze_one_async(
     # logging.info("Vision DOC_OCR: %.3fs", time.time() - t1) 
     ai_results = {"foodName": item, "imageUrl": first_img_url, "imageSource" : image_source, **data}
     info = FoodInfo.model_validate(ai_results)
+    
+    # 검색 결과를 search_results에 저장
+    try:
+        uid = cons.get("uid")
+        if uid:
+            # foodId를 {나라코드두글자}_{foodName} 형태로 생성
+            food_id = f"{info.country}_{info.foodName}"
+            await search_service._save_search_result(
+                uid=uid,
+                query=item,  # 원어 음식명
+                food_id=food_id,
+                food_info=info
+            )
+            logging.info(f"검색 결과 저장 완료: {food_id}")
+    except Exception as e:
+        logging.warning(f"검색 결과 저장 실패: {str(e)}")
+    
     return info

@@ -23,158 +23,45 @@ class SearchService:
     def __init__(self):
         self.db = firestore_client.db
     
-    async def search_food(self, request: SimpleSearchRequest, uid: Optional[str] = None) -> SimpleSearchResponse:
-        """
-        음식 검색 및 AI 해석
-        
-        Args:
-            request (SimpleSearchRequest): 검색 요청 (OCR/번역 결과)
-            uid (Optional[str]): 사용자 ID (로그인한 경우)
-            
-        Returns:
-            SimpleSearchResponse: AI가 해석한 음식 정보
-        """
-        try:
-            # 1단계: 메타데이터에서 동일한 음식 검색 (AI 비용 절약)
-            existing_metadata = await self._find_existing_food_metadata(request.query, request.country)
-            
-            if existing_metadata:
-                logger.info(f"기존 음식 메타데이터 발견: {existing_metadata['foodName']}")
-                
-                # 기존 음식 정보로 응답 생성
-                food_info = await self._get_food_info_from_metadata(existing_metadata)
-                
-                # 검색 결과 저장 (중복이지만 사용자별 기록용)
-                if uid:
-                    await self._save_search_result(uid, request.query, existing_metadata['foodId'], food_info)
-                    await self._update_food_search_count(request.query, request.country)
-                
-                # 검색 횟수 조회
-                search_count = existing_metadata['searchCount']
-                
-                return SimpleSearchResponse(
-                    foodId=existing_metadata['foodId'],
-                    foodInfo=food_info,
-                    isSaved=False,
-                    searchCount=search_count
-                )
-            
-            # 2단계: 새로운 음식인 경우 AI 해석 실행
-            logger.info(f"새로운 음식 AI 해석 시작: {request.query}")
-            
-            # 임시 구현 (AI 로직은 나중에 연결)
-            food_id = f"{request.country}_{request.query[:5]}"  # 국가_음식명 형태로 ID 생성
-            
-            # AI 음식 설명 생성 (임시 데이터)
-            food_info = FoodInfo(
-                foodName=request.query,
-                dishName=request.query,
-                country=request.country or "JP",
-                summary="이 음식에 대한 AI 설명이 여기에 표시됩니다.",
-                recommendations=["음식을 좋아하는 사람"],
-                ingredients=["재료1", "재료2"],
-                allergens=["알러지 정보"],
-                imageUrl="https://example.com/placeholder.jpg",
-                imageSource="AI 생성",
-                culturalBackground="문화/역사 정보"
-            )
-            
-            # 검색 결과를 Firestore에 저장 (TTL 자동 처리)
-            if uid:
-                await self._save_search_result(uid, request.query, food_id, food_info)
-            
-            # 검색 횟수 조회
-            search_count = await self._get_search_count(food_id)
-            
-            # 응답 생성
-            response = SimpleSearchResponse(
-                foodId=food_id,
-                foodInfo=food_info,
-                isSaved=False,
-                searchCount=search_count
-            )
-            
-            # 검색 시 해당 음식의 카운트 업데이트
-            if uid:
-                await self._update_food_search_count(request.query, request.country or "JP")
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"음식 검색 실패: {str(e)}")
-            raise Exception(f"음식 검색 중 오류 발생: {str(e)}")
-    
-    async def _get_existing_search_result(self, uid: str, query: str) -> Optional[SimpleSearchResponse]:
-        """
-        기존 검색 결과 조회 (중복 검색 최적화)
-        
-        Args:
-            uid (str): 사용자 ID
-            query (str): 검색 쿼리
-            
-        Returns:
-            Optional[SimpleSearchResponse]: 기존 검색 결과 또는 None
-        """
-        try:
-            # 최근 24시간 내 같은 사용자의 같은 검색 결과 조회
-            cutoff_time = datetime.now() - timedelta(hours=24)
-            
-            search_results = self.db.collection('search_results').where('uid', '==', uid)\
-                .where('query', '==', query)\
-                .where('timestamp', '>', cutoff_time)\
-                .order_by('timestamp', direction=firestore.Query.DESCENDING)\
-                .limit(1)\
-                .stream()
-            
-            for doc in search_results:
-                data = doc.to_dict()
-                if data:
-                    # FoodInfo 모델 재구성
-                    food_info = FoodInfo(**data.get('foodInfo', {}))
-                    
-                    return SimpleSearchResponse(
-                        foodId=data.get('foodId'),
-                        foodInfo=food_info,
-                        isSaved=data.get('isSaved', False),
-                        searchCount=data.get('searchCount', 0)
-                    )
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"기존 검색 결과 조회 실패: {str(e)}")
-            return None
-    
     async def _save_search_result(self, uid: str, query: str, food_id: str, food_info: FoodInfo):
         """
-        검색 결과를 Firestore에 저장 (중복 방지, TTL 자동 처리)
+        검색 결과를 Firestore에 저장 (AI 분석 결과 포함)
         
         Args:
             uid (str): 사용자 ID
-            query (str): 검색 쿼리
-            food_id (str): 음식 ID
-            food_info (FoodInfo): 음식 정보
+            query (str): 검색 쿼리 (원어 음식명)
+            food_id (str): 음식 ID ({나라코드두글자}_{foodName} 형태)
+            food_info (FoodInfo): AI 분석된 음식 정보
         """
         try:
-            # 사용자별로 음식 ID 기준으로 중복 방지
-            # 문서 ID를 "{uid}_{food_id}" 형태로 생성하여 중복 방지
-            doc_id = f"{uid}_{food_id}"
+            # 문서 ID를 food_id와 동일하게 설정 ({나라코드두글자}_{foodName})
+            doc_id = food_id
             
             result_data = {
                 'uid': uid,
-                'query': query,
-                'foodId': food_id,
-                'foodInfo': food_info.model_dump(),
+                'query': query.lower(),  # 검색 요청한 원어 음식명 (대소문자 구분 없이 써서 나중에 서치하게)
+                'foodId': food_id,  # 문서 ID와 동일
+                'foodName': food_info.foodName,  # 검색한 음식명
+                'data': {
+                    'dishName': food_info.dishName,
+                    'country': food_info.country,
+                    'summary': food_info.summary,
+                    'recommendations': food_info.recommendations,
+                    'ingredients': food_info.ingredients,
+                    'allergens': food_info.allergens,
+                    'imageUrl': food_info.imageUrl,
+                    'imageSource': food_info.imageSource,
+                    'culturalBackground': food_info.culturalBackground
+                },
                 'timestamp': datetime.now(),
                 'updatedAt': datetime.now()
-                # TTL 필드 제거 - Firestore에서 자동 처리
             }
             
-            # Firestore에 검색 결과 저장 (중복 시 덮어쓰기)
+            # Firestore에 검색 결과 저장
             doc_ref = self.db.collection('search_results').document(doc_id)
             doc_ref.set(result_data)
             
-            logger.info(f"검색 결과 저장 완료: {doc_id} (중복 방지)")
+            logger.info(f"검색 결과 저장 완료: {doc_id}")
             
         except Exception as e:
             logger.error(f"검색 결과 저장 실패: {str(e)}")
@@ -251,13 +138,6 @@ class SearchService:
             
         except Exception as e:
             logger.error(f"음식 카운트 업데이트 실패: {str(e)}")
-
-    async def cleanup_old_search_logs(self, days: int = 30):
-        """
-        오래된 검색 로그 정리 (백업용) - 삭제됨
-        """
-        # search_logs 컬렉션이 삭제되어 이 메서드는 더 이상 사용되지 않음
-        pass
 
     async def get_top_foods_by_country(self, country: str, limit: int = 3) -> List[Dict[str, Any]]:
         """
