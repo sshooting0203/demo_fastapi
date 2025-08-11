@@ -14,7 +14,8 @@ security = HTTPBearer()
 async def get_current_user_info(
     current_user: Dict = Depends(get_current_user), 
 ):
-    """토큰 검증 + 유저 upsert + 최소 프로필 반환"""
+    """토큰 검증(firebase) + 유저 upsert + 최소 프로필 반환
+    Firebase Admin SDK로 검증"""
     uid = current_user["uid"]
     user = await user_service.create_or_update_user(current_user)
     
