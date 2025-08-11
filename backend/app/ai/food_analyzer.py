@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google import genai
-from app.ai.dto import AnalyzeOneRequest
-from app.ai.image_fetcher import fetch_dish_image_url_async
-from app.models.food import FoodInfo
+from backend.app.ai.dto import AnalyzeOneRequest
+from backend.app.ai.image_fetcher import fetch_dish_image_url_async
+from backend.app.models.food import FoodInfo
 
 load_dotenv()
 

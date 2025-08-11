@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from google.cloud import vision
 from google.oauth2 import service_account
 from statistics import median
-from app.ai.image_preprocess import preprocess_image
+from backend.app.ai.image_preprocess import preprocess_image
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from app.models.food import FoodInfo
+from backend.app.models.food import FoodInfo
 
 # ---------- OCR ----------
 class OCRWord(BaseModel):

@@ -2,16 +2,16 @@ import asyncio, time, logging
 from fastapi import APIRouter, HTTPException, UploadFile, Form, File
 from typing import List, Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.ai.food_analyzer import _to_thread, extract_user_constraints, analyze_one_async
-from app.ai.translate_food import translate_async
-from app.ai.ocr_service import detect_menu
-from app.services.user_service import user_service
+from backend.app.ai.food_analyzer import _to_thread, extract_user_constraints, analyze_one_async
+from backend.app.ai.translate_food import translate_async
+from backend.app.ai.ocr_service import detect_menu
+from backend.app.services.user_service import user_service
 import httpx
-from app.ai.dto import (
+from backend.app.ai.dto import (
     AnalyzeOneRequest, AnalyzeOneResponse, MenuItemOut,
 )
-from app.models import SaveFoodRequest
-from app.routers.auth import get_current_user
+from backend.app.models import SaveFoodRequest
+from backend.app.routers.auth import get_current_user
 from fastapi import APIRouter, HTTPException, UploadFile, Form, File, Depends
 from typing import List, Optional, Dict
 
