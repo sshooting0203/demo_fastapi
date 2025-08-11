@@ -9,6 +9,11 @@ from firebase_admin import auth, firestore
 import os
 import logging
 
+from firebase_admin import auth
+from firebase_admin import firestore as admin_fs
+from google.cloud import firestore as gcf
+
+
 logger = logging.getLogger(__name__)
 
 # HTTP Bearer 인증을 위한 의존성
@@ -450,34 +455,74 @@ class UserService:
 # 서비스 인스턴스 생성
 user_service = UserService()
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Optional[Dict]:
     """
-    Firebase 토큰을 검증하고 현재 사용자 정보를 반환
-    
-    Args:
-        credentials (HTTPAuthorizationCredentials): HTTP Bearer 토큰
-        
-    Returns:
-        Optional[dict]: 사용자 정보 또는 None
-        
-    Raises:
-        HTTPException: 토큰 검증 실패 시
+    Firebase 토큰 검증 + Firestore users 문서 upsert/merge 후 사용자 정보 반환
     """
     token = credentials.credentials
     is_emulator = bool(os.getenv("FIREBASE_AUTH_EMULATOR_HOST"))
 
     try:
-        # 에뮬레이터 토큰은 check_revoked/issuer 검사를 끄는 게 안전
+        # 에뮬레이터 토큰은 revoke/issuer 체크를 완화
         decoded = auth.verify_id_token(token, check_revoked=not is_emulator)
 
-        user_info = {
-            "uid": decoded["uid"],
+        # 토큰으로 기반 최소 정보
+        uid = decoded["uid"]
+        token_info = {
+            "uid": uid,
             "email": decoded.get("email", ""),
-            "displayName": decoded.get("name", ""),
+            "displayName": decoded.get("name", "") or decoded.get("display_name", ""),
             "emailVerified": decoded.get("email_verified", False),
         }
-        logger.info(f"사용자 인증 성공: {user_info['uid']}")
-        return user_info
+
+        # 위에 거에 Firestore users/{uid} upsert + 병합
+        db = admin_fs.client()
+        user_ref = db.collection("users").document(uid)
+        snap = user_ref.get()
+
+        if not snap.exists:
+            # 처음 로그인한 사용자: 최소 필드로 생성
+            base_doc = {
+                "uid": uid,
+                "email": token_info["email"],
+                "displayName": token_info["displayName"] or "",
+                "currentCountry": None,              # 초기값
+                "allergies": [],                     # 초기값 (스키마에 맞게 조정)
+                "dietaryCodes": [],                  # 초기값
+                "createdAt": gcf.SERVER_TIMESTAMP,
+                "updatedAt": gcf.SERVER_TIMESTAMP,
+            }
+            user_ref.set(base_doc)
+            fs_doc = base_doc
+        else:
+            fs_doc = snap.to_dict() or {}
+            # 토큰 정보로 기본 프로필 동기화(이메일/이름 변경 반영), 나머지는 유지
+            user_ref.set(
+                {
+                    "email": token_info["email"],
+                    "displayName": token_info["displayName"] or fs_doc.get("displayName", ""),
+                    "updatedAt": gcf.SERVER_TIMESTAMP,
+                },
+                merge=True,
+            )
+            # 최신 스냅샷 다시 읽는 절차도 추가하는 ...
+            fs_doc = user_ref.get().to_dict() or {}
+
+        # 반환 값 구성: Firestore 값이 우선, 없으면 토큰값으로 fallback
+        result = {
+            "uid": uid,
+            "email": fs_doc.get("email") or token_info["email"],
+            "displayName": fs_doc.get("displayName") or token_info["displayName"] or "사용자",
+            "emailVerified": token_info["emailVerified"],
+            "currentCountry": fs_doc.get("currentCountry"),
+            "allergies": fs_doc.get("allergies", []),
+            "dietaryCodes": fs_doc.get("dietaryCodes", []),
+        }
+
+        logger.info(f"사용자 인증/동기화 성공: {uid}")
+        return result
 
     except Exception as e:
         logger.error(f"[auth] verify_id_token 실패 (emulator={is_emulator}): {e}")
