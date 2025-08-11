@@ -356,17 +356,18 @@ class UserService:
                 current_count = doc.to_dict().get('searchCount', 0)
                 meta_ref.update({
                     'searchCount': current_count + 1,
-                    'lastSearchedAt': datetime.now()
+                    'lastSearched': datetime.now()
                 })
             else:
                 # 새 문서 생성
                 meta_ref.set({
                     'country': food_info.country,
                     'foodName': food_info.foodName,
+                    'dishName' : food_info.dishName,
                     'searchCount': 1,
                     'saveCount': 0,  # 저장 횟수도 초기화
-                    'createdAt': datetime.now(),
-                    'lastSearchedAt': datetime.now()
+                    'updatedAt': datetime.now(),
+                    'lastSearched': datetime.now()
                 })
                 
             logger.info(f"메타데이터 검색 횟수 증가: {doc_name}")
