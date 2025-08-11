@@ -103,8 +103,35 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
         # 메타데이터 검색 횟수 증가
         await user_service.increase_search_count(data)
         
+        # 개인화된 정보 생성 (첫 번째 검색에서도)
+        personalized_result = await search_service.personalize_search_result(
+            search_result={
+                'uid': uid,
+                'query': req.food_name,
+                'foodId': f"{data.country}_{data.foodName}",
+                'foodName': data.foodName,
+                'data': {
+                    'dishName': data.dishName,
+                    'country': data.country,
+                    'summary': data.summary,
+                    'recommendations': data.recommendations,
+                    'ingredients': data.ingredients,
+                    'allergens': data.allergens,
+                    'imageUrl': data.imageUrl,
+                    'imageSource': data.imageSource,
+                    'culturalBackground': data.culturalBackground
+                }
+            },
+            user_allergies=user.allergies if user else [],
+            user_dietary=user.dietaryRestrictions if user else []
+        )
+        
         logger.info(f"AI 분석 완료. 새 결과 저장됨")
-        return AnalyzeOneResponse(data=data, is_from_cache=False)
+        return AnalyzeOneResponse(
+            data=data, 
+            is_from_cache=False,
+            personalized_info=personalized_result.get('personalized', {})
+        )
         
     except Exception as e:
         logger.exception("analyze-one failed: %s", e)

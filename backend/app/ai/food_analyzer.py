@@ -11,6 +11,22 @@ from app.services.search_service import search_service
 
 load_dotenv()
 
+"""
+2025-08-12 01:45 수정한 내용 ***********************
+
+ai 설명해주는 응답 데이터 아까 말한 내용대로 바꿈
+
+-> search_results 컬렉션에 저장되는 data ={ } 구조는 유지
+그 겉에 싸는 방식으로 사용자 정보(알러지, 종교 등) 개인 결과 같이 전달
+그니까 검색 페이지 및 저장 거기서는 데이터 바로 펼치면 될 듯
+
+첫 번째 검색 (AI 분석):
+AI로 음식 분석 → 사용자 정보와 결합 → 개인화된 결과 반환
+
+두 번째 검색 (기존 결과 사용):
+기존 결과(data만 잇음) 조회 → 사용자 정보와 결합 → 개인화된 결과 반환
+"""
+
 MAX_TOKENS = 2000
 GENAI_API_KEY = os.getenv("GOOGLE_API_KEY")
 SERVICE_ACCOUNT = os.getenv("FIREBASE_CREDENTIALS")
@@ -197,6 +213,37 @@ async def analyze_one_async(
         if uid:
             # foodId를 {나라코드두글자}_{원어} 형태로 생성
             food_id = f"{info.country}_{info.foodName}"
+            
+            # 사용자 정보와 결합하여 개인화된 결과 생성
+            from app.services.search_service import search_service
+            
+            # 개인화된 검색 결과 생성
+            personalized_result = await search_service.personalize_search_result(
+                search_result={
+                    'uid': uid,
+                    'query': item,
+                    'foodId': food_id,
+                    'foodName': info.foodName,
+                    'data': {
+                        'dishName': info.dishName,
+                        'country': info.country,
+                        'summary': info.summary,
+                        'recommendations': info.recommendations,
+                        'ingredients': info.ingredients,
+                        'allergens': info.allergens,
+                        'imageUrl': info.imageUrl,
+                        'imageSource': info.imageSource,
+                        'culturalBackground': info.culturalBackground
+                    }
+                },
+                user_allergies=cons.get("allergies", []),
+                user_dietary=cons.get("religion", []) if isinstance(cons.get("religion"), list) else [cons.get("religion")] if cons.get("religion") else []
+            )
+            
+            # 개인화된 결과를 FoodInfo에 반영
+            if personalized_result.get('personalized', {}).get('safe_recommendations'):
+                info.recommendations = personalized_result['personalized']['safe_recommendations']
+            
             await search_service._save_search_result(
                 uid=uid,
                 query=item,  # 원어 음식명
@@ -204,6 +251,15 @@ async def analyze_one_async(
                 food_info=info
             )
             logging.info(f"검색 결과 저장 완료: {food_id}")
+            
+            # 개인화 정보 로깅
+            personalized_data = personalized_result.get('personalized', {})
+            if personalized_data.get('allergy_warnings'):
+                logging.info(f"알레르기 경고: {personalized_data['allergy_warnings']}")
+            if personalized_data.get('dietary_warnings'):
+                logging.info(f"식단제한 경고: {personalized_data['dietary_warnings']}")
+            logging.info(f"안전 여부: {personalized_data.get('is_safe', True)}")
+            
     except Exception as e:
         logging.warning(f"검색 결과 저장 실패: {str(e)}")
     
