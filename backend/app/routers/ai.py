@@ -12,7 +12,7 @@ from app.ai.dto import (
 )
 
 from app.ai.food_analyzer import convert_ai_result_to_food_info
-from app.models.food import SaveFoodRequest
+from app.models import SaveFoodRequest
 from app.routers.auth import get_current_user
 from fastapi import APIRouter, HTTPException, UploadFile, Form, File, Depends
 from typing import List, Optional, Dict
