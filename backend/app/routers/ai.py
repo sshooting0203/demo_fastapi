@@ -10,15 +10,10 @@ import httpx
 from app.ai.dto import (
     AnalyzeOneRequest, AnalyzeOneResponse, MenuItemOut,
 )
-
-from app.ai.food_analyzer import convert_ai_result_to_food_info
 from app.models import SaveFoodRequest
 from app.routers.auth import get_current_user
 from fastapi import APIRouter, HTTPException, UploadFile, Form, File, Depends
 from typing import List, Optional, Dict
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from firebase_admin import auth, firestore
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai를 사용하여 음식에 대한 ocr, translate, analyze"])
@@ -27,17 +22,16 @@ ALLOWED_CT = {"image/png", "image/jpeg"} # 이미지 허용 포맷
 MAX_BYTES = 5 * 1024 * 1024  # 이미지 최대 허용 크기5MB
 
 @router.post("/analyze", response_model=AnalyzeOneResponse)
-async def analyze_one(req: AnalyzeOneRequest):
-    user = await user_service.get_user_profile(req.uid)  #여기 수정(변경됨)
+async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_current_user)):
+    uid = current_user["uid"]
+    user = await user_service.get_user_profile(uid)  #여기 수정(변경됨)
     cons = extract_user_constraints(user or {})
 
     try:
         data = await analyze_one_async(cons, req)
-        #!!!!!!!!!!!!!!!!!!! AI 결과를 FoodInfo로 변환
-        food_info = convert_ai_result_to_food_info(data)
+        # logging.info("data results : %s", data)
+        await user_service.increase_search_count(data)
         # 메타데이터 검색 횟수 증가 (저장은 안함)
-        await user_service.increase_search_count(food_info)
-        
         return AnalyzeOneResponse(data=data)
     except Exception as e:
         logger.exception("analyze-one failed: %s", e)

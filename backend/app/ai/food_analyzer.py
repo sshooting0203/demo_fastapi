@@ -7,10 +7,9 @@ from google import genai
 from app.ai.dto import AnalyzeOneRequest
 from app.ai.image_fetcher import fetch_dish_image_url_async
 from app.models.food import FoodInfo
-from app.models.search import SimpleSearchResponse
-from app.services.user_service import user_service
 
 load_dotenv()
+
 MAX_TOKENS = 1700
 GENAI_API_KEY = os.getenv("GOOGLE_API_KEY")
 SERVICE_ACCOUNT = os.getenv("FIREBASE_CREDENTIALS")
@@ -48,7 +47,7 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     Language rules (STRICT):
     - The "country" field MUST be in English only (choose from: {country_enum}). If unknown, use "".
     - The "allergens" array MUST be in English only, using only canonical values from: {allergen_enum}. If unknown, use [].
-    - All other fields (dishName, ingredients, summary, recommendedFor, originCulture) MUST be entirely in {target_lang_code}.
+    - All other fields (dishName, ingredients, summary, recommendations, culturalBackground) MUST be entirely in {target_lang_code}.
     - Never mix languages inside a single field.
     Schema:
     {{
@@ -57,8 +56,8 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     "ingredients": ["{target_lang_code} 3~5 words"],                
     "allergens": ["{allergen_enum}"],      
     "summary": "<{target_lang_code} 2 sentences>",
-    "recommendedFor": ["{target_lang_code} ..."],
-    "originCulture": "<{target_lang_code} 2 sentences>"
+    "recommendations": ["{target_lang_code} ..."],
+    "culturalBackground": "<{target_lang_code} 2 sentences>"
     }}
 
     User constraints:
@@ -80,7 +79,7 @@ def safe_load_json(text: str) -> Dict:
 def validate_and_normalize(obj: Dict) -> Dict:
     required = [
         "country","dishName","ingredients","allergens",
-        "summary","recommendedFor","originCulture"
+        "summary","recommendations","culturalBackground"
     ]
     for k in required:
         if k not in obj:
@@ -95,10 +94,10 @@ def validate_and_normalize(obj: Dict) -> Dict:
     # 문자열 필드 정리
     obj["dishName"] = to_str(obj.get("dishName"))
     obj["summary"] = to_str(obj.get("summary"))
-    obj["originCulture"] = to_str(obj.get("originCulture"))
+    obj["culturalBackground"] = to_str(obj.get("culturalBackground"))
     # 배열 필드 정리
     obj["ingredients"] = str_list(obj.get("ingredients"))
-    obj["recommendedFor"] = str_list(obj.get("recommendedFor"))
+    obj["recommendations"] = str_list(obj.get("recommendations"))
 
     # country 제약
     raw_country = to_str(obj.get("country"))
@@ -114,26 +113,6 @@ def validate_and_normalize(obj: Dict) -> Dict:
     raws = str_list(obj.get("allergens"))
     obj["allergens"] = [x for x in uniq([norm_allergen(a) for a in raws]) if x]
     return obj
-
-#########################################################################3
-############여기 foodInfo와 필드명 달라서 ㅁㅐ핑하는 함수 추가 ##############33
-def convert_ai_result_to_food_info(ai_result: Dict) -> FoodInfo:
-    """AI 분석 결과를 FoodInfo 모델로 변환"""
-    from app.models.food import FoodInfo
-    
-    return FoodInfo(
-        foodName=ai_result.get("foodName", ""),
-        dishName=ai_result.get("dishName", ""),
-        country=ai_result.get("country", ""),
-        summary=ai_result.get("summary", ""),
-        recommendations=ai_result.get("recommendedFor", []),  # 필드명 매핑
-        ingredients=ai_result.get("ingredients", []),
-        allergens=ai_result.get("allergens", []),
-        imageUrl=ai_result.get("url", ""),                   # 필드명 매핑
-        imageSource=ai_result.get("imgSrc"),                 # 필드명 매핑
-        culturalBackground=ai_result.get("originCulture")    # 필드명 매핑
-    )
-
 
 # 동기함수 로직 스레드로 off-load
 async def _to_thread(fn, *args, **kwargs):
@@ -203,11 +182,10 @@ async def analyze_one_async(
     except Exception:
         raw = safe_load_json(text) # 모델이 fence를 넣었거나 잡다한 문구가 끼면 기존 안전 파서 사용
     data = validate_and_normalize(raw)
-
+    image_source = 'Crawling' if first_img_url is not None else 'None'
     # t1 = time.time()
     # # url = await _to_thread(fetch_dish_image_url, data.get("dishName") or item, req.source_language)
     # logging.info("Vision DOC_OCR: %.3fs", time.time() - t1) 
-    
-    image_source = 'Crawling' if first_img_url is not None else 'None'
-    return {"foodName": item, "url": first_img_url, "imgSrc" : image_source, **data}
-
+    ai_results = {"foodName": item, "imageUrl": first_img_url, "imageSource" : image_source, **data}
+    info = FoodInfo.model_validate(ai_results)
+    return info

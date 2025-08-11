@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from app.models.food import FoodInfo
 
 # ---------- OCR ----------
 class OCRWord(BaseModel):
@@ -21,4 +22,4 @@ class AnalyzeOneRequest(BaseModel):
     food_name: str = Field(..., description="translated된 이름이 아닌 원어가 들어와야함")
 
 class AnalyzeOneResponse(BaseModel):
-    data: dict
+    data: FoodInfo
