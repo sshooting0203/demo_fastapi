@@ -85,6 +85,21 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
             
             await user_service.increase_search_count(existing_food_info)
             
+            # 기존 검색 결과의 timestamp 업데이트
+            try:
+                from datetime import datetime
+                current_time = datetime.now()
+                
+                # timestamp 필드 업데이트
+                doc_ref = search_service.db.collection('search_results').document(existing_result['doc_id'])
+                doc_ref.update({
+                    'timestamp': current_time,
+                    'updatedAt': current_time
+                })
+                logger.info(f"기존 검색 결과 timestamp 업데이트: {existing_result['doc_id']}")
+            except Exception as e:
+                logger.warning(f"timestamp 업데이트 실패: {str(e)}")
+            
             # 4단계: 개인화된 결과 반환
             logger.info(f"기존 결과 + 개인화 완료 (AI 분석 없음)")
             return AnalyzeOneResponse(

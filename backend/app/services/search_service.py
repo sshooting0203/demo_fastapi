@@ -15,7 +15,7 @@ class SearchService:
     
     주요 기능:
     - OCR/번역 결과를 AI 음식 설명으로 변환
-    - 검색 로그 저장 및 관리 (TTL 자동 처리)
+    - 검색 로그 저장 및 관리
     - 중복 검색 최적화
     - 음식 검색 통계 제공
     """
@@ -66,6 +66,7 @@ class SearchService:
         try:
             # 문서 ID를 food_id와 동일하게 설정 ({나라코드두글자}_{foodName})
             doc_id = food_id
+            current_time = datetime.now()
             
             result_data = {
                 'uid': uid,
@@ -83,8 +84,8 @@ class SearchService:
                     'imageSource': food_info.imageSource,
                     'culturalBackground': food_info.culturalBackground
                 },
-                'timestamp': datetime.now(),
-                'updatedAt': datetime.now()
+                'timestamp': current_time,
+                'updatedAt': current_time
             }
             
             # Firestore에 검색 결과 저장
@@ -169,42 +170,130 @@ class SearchService:
         except Exception as e:
             logger.error(f"음식 카운트 업데이트 실패: {str(e)}")
 
+    def _consolidate_foods_by_dish_name(self, foods: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        한국어 이름(dishName)이 같은 음식들을 통합하여 searchCount 합산
+        
+        Args:
+            foods (List[Dict[str, Any]]): 원본 음식 목록
+            
+        Returns:
+            List[Dict[str, Any]]: 통합된 음식 목록
+        """
+        if not foods:
+            return []
+        
+        logger.info(f"통합 시작: 총 {len(foods)}개 음식")
+        
+        # 한국어 이름별로 그룹화 (dishName 사용)
+        name_groups = {}
+        
+        for food in foods:
+            korean_name = food.get('dishName', '').strip()
+            if not korean_name:
+                logger.warning(f"한국어 이름이 없는 음식: {food['doc_id']}")
+                continue
+            
+            if korean_name not in name_groups:
+                name_groups[korean_name] = []
+            name_groups[korean_name].append(food)
+        
+        logger.info(f"한국어 이름별 그룹: {len(name_groups)}개 그룹")
+        
+        # 각 그룹을 통합
+        consolidated = []
+        
+        for korean_name, group in name_groups.items():
+            if len(group) == 1:
+                # 그룹이 하나면 그대로 추가
+                food = group[0]
+                consolidated_food = {
+                    'foodId': food['foodId'],
+                    'foodName': food['foodName'],
+                    'dishName': food['dishName'],
+                    'searchCount': food['searchCount'],
+                    'saveCount': food['saveCount'],
+                    'lastSearched': food['lastSearched'],
+                    'country': food['country'],
+                    'consolidated_count': 1,
+                    'original_docs': [food['doc_id']]
+                }
+            else:
+                # 여러 개면 통합
+                logger.info(f"통합 대상: '{korean_name}' - {len(group)}개 문서")
+                for food in group:
+                    logger.info(f"  - {food['doc_id']}: {food['dishName']} (searchCount: {food['searchCount']})")
+                
+                total_search_count = sum(f['searchCount'] for f in group)
+                total_save_count = sum(f['saveCount'] for f in group)
+                
+                # searchCount가 가장 높은 것을 대표로 선택
+                representative = max(group, key=lambda x: x['searchCount'])
+                
+                # 모든 원어 이름을 수집
+                all_food_names = [f['foodName'] for f in group if f['foodName']]
+                
+                consolidated_food = {
+                    'foodId': representative['foodId'],
+                    'foodName': representative['foodName'],  # 대표 항목의 원어 이름
+                    'dishName': korean_name,  # 한국어 이름
+                    'searchCount': total_search_count,
+                    'saveCount': total_save_count,
+                    'lastSearched': representative['lastSearched'],
+                    'country': representative['country'],
+                    'consolidated_count': len(group),
+                    'original_docs': [f['doc_id'] for f in group]
+                }
+            
+            consolidated.append(consolidated_food)
+        
+        logger.info(f"통합 완료: {len(consolidated)}개 음식")
+        return consolidated
+
     async def get_top_foods_by_country(self, country: str, limit: int = 3) -> List[Dict[str, Any]]:
         """
-        국가별 상위 음식 조회 (food_metadata 기반)
+        국가별 상위 음식 조회 (food_metadata 기반, 한국어 이름 통합 적용)
         
         Args:
             country (str): 국가 코드 (예: "JP", "KR")
             limit (int): 조회할 음식 수 (기본값: 3)
             
         Returns:
-            List[Dict[str, Any]]: 상위 음식 목록 (foodId, foodName, dishName, searchCount, saveCount 포함)
+            List[Dict[str, Any]]: 상위 음식 목록 (한국어 이름 통합 적용)
         """
         try:
-            # food_metadata에서 해당 국가의 음식들을 searchCount 기준으로 정렬하여 상위 limit개 조회
+            # food_metadata에서 해당 국가의 음식들을 searchCount 기준으로 정렬하여 더 많이 가져옴
             query = self.db.collection('food_metadata')\
                 .where('country', '==', country)\
                 .order_by('searchCount', direction=firestore.Query.DESCENDING)\
-                .limit(limit)
+                .limit(limit * 3)  # 통합 후 필터링을 위해 더 많이 가져옴
+            
             logging.info('query :  %s', query)
 
             docs = query.stream()
-            top_foods = []
+            all_foods = []
             
             for doc in docs:
                 data = doc.to_dict()
                 food_data = {
-                    'foodId': doc.id,  # 문서 ID (예: JP_tonkatsu)
-                    'foodName': data.get('foodName', ''),  # 한국어 이름
-                    'dishName': data.get('dishName', ''),  # 영어/일본어 이름
+                    'doc_id': doc.id,
+                    'foodId': doc.id,
+                    'foodName': data.get('foodName', ''),
+                    'dishName': data.get('dishName', ''),
                     'searchCount': data.get('searchCount', 0),
                     'saveCount': data.get('saveCount', 0),
                     'lastSearched': data.get('lastSearched'),
                     'country': data.get('country', '')
                 }
-                top_foods.append(food_data)
+                all_foods.append(food_data)
             
-            logger.info(f"국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료")
+            # 한국어 이름 기준으로 통합
+            consolidated_foods = self._consolidate_foods_by_dish_name(all_foods)
+            
+            # searchCount 기준으로 정렬하여 상위 limit개 반환
+            top_foods = sorted(consolidated_foods, key=lambda x: x['searchCount'], reverse=True)[:limit]
+            
+            logger.info(f"국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료 (한국어 이름 통합 적용)")
             return top_foods
             
         except Exception as e:
