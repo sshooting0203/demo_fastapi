@@ -71,6 +71,7 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     {{
     "country": "<{country_enum}> or \"\"",
     "dishName": "<{target_lang_code}>",
+    "englishName": "<englishName of dishName>",
     "ingredients": ["{target_lang_code} 3~5 words"],                
     "allergens": ["{allergen_enum}"],      
     "summary": "<{target_lang_code} 2 sentences>",
@@ -97,7 +98,7 @@ def safe_load_json(text: str) -> Dict:
 def validate_and_normalize(obj: Dict) -> Dict:
     required = [
         "country","dishName","ingredients","allergens",
-        "summary","recommendations","culturalBackground"
+        "summary","recommendations","culturalBackground", "englishName"
     ]
     for k in required:
         if k not in obj:
@@ -113,6 +114,7 @@ def validate_and_normalize(obj: Dict) -> Dict:
     obj["dishName"] = to_str(obj.get("dishName"))
     obj["summary"] = to_str(obj.get("summary"))
     obj["culturalBackground"] = to_str(obj.get("culturalBackground"))
+    obj["englishName"] = to_str(obj.get("englishName"))
     # 배열 필드 정리
     obj["ingredients"] = str_list(obj.get("ingredients"))
     obj["recommendations"] = str_list(obj.get("recommendations"))
@@ -206,7 +208,7 @@ async def analyze_one_async(
     # logging.info("Vision DOC_OCR: %.3fs", time.time() - t1) 
     ai_results = {"foodName": item, "imageUrl": first_img_url, "imageSource" : image_source, **data}
     info = FoodInfo.model_validate(ai_results)
-    
+    logging.info('[AI] : %s',info)
     # 검색 결과를 search_results에 저장
     try:
         uid = cons.get("uid")

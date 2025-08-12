@@ -5,6 +5,7 @@ class FoodInfo(BaseModel):
     """음식 상세 정보 및 AI 응답 처리용"""
     foodName: str = Field(..., description="음식 이름(원어)", example="とんかつ")
     dishName: str = Field(..., description="음식 이름(한국어)", example="돈가스")
+    englishName: str = Field(..., description="음식 이름(영문어)", example="Tonkatse")
     country: str = Field(..., description="국가 코드 (예: JP, KR, US)", example="JP")
     summary: str = Field(..., description="음식 요약 설명", example="일본의 대표적인 돼지고기 튀김 요리입니다.")
     recommendations: List[str] = Field(default=[], description="추천 사용자 배열", example=["고기 좋아하는 사람", "튀김 요리 선호자"])
