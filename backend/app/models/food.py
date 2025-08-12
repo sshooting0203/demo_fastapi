@@ -11,6 +11,7 @@ class FoodInfo(BaseModel):
     recommendations: List[str] = Field(default=[], description="추천 사용자 배열", example=["고기 좋아하는 사람", "튀김 요리 선호자"])
     ingredients: List[str] = Field(default=[], description="주요 재료", example=["돼지고기", "빵가루", "계란", "밀가루"])
     allergens: List[str] = Field(default=[], description="알레르기 성분 (allergy_codes와 일치)", example=["WHEAT", "EGG"])
+    dietaryRestrictions: List[str] = Field(default=[], description="종교 성분 (dietary_restrictions와 일치)", example=["HINDUISM", " ISLAM"])
     imageUrl: str = Field(..., description="음식 이미지 URL", example="https://example.com/tonkatsu.jpg")
     imageSource: Optional[str] = Field(None, description="이미지 출처", example="일본 요리 사진")
     culturalBackground: Optional[str] = Field(None, description="문화적 배경", example="일본 메이지 시대에 서양의 커틀릿을 참고하여 만들어진 요리입니다.")

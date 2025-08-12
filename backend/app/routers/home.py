@@ -5,7 +5,7 @@ from ..services.user_service import get_current_user
 
 router = APIRouter(prefix="/api/home", tags=["홈"])
 
-@router.get("/")
+@router.get("") # 홈은 / 없이 가기
 async def get_home_data(current_user: dict = Depends(get_current_user)):
     """홈 화면 데이터: 사용자 요약 + 현재 국가 Top3"""
     try:

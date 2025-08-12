@@ -216,7 +216,7 @@ class UserService:
     
     async def save_food(self, uid: str, save_request: SaveFoodRequest) -> SavedFood:
         """
-        사용자가 음식을 저장
+        사용자가 음식을 저장 (AI 분석 결과를 그대로 저장)
         
         Args:
             uid (str): 사용자 ID
@@ -229,23 +229,56 @@ class UserService:
             Exception: 음식 저장 실패 시
         """
         try:
-            # 저장된 음식 데이터 구성
+            # 1. 사용자 정보 조회 (currentCountry 확인)
+            user_profile = await self.get_user_profile(uid)
+            if not user_profile:
+                raise Exception("사용자 프로필을 찾을 수 없습니다")
+            
+            current_country = user_profile.currentCountry
+            if not current_country:
+                raise Exception("사용자의 현재 국가가 설정되지 않았습니다")
+            
+            # 2. 문서명 생성: {사용자현재국가코드}_{englishName}
+            english_name = save_request.data.get('englishName', '')
+            if not english_name:
+                raise Exception("AI 응답에 englishName이 없습니다")
+            
+            english_name_normalized = english_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+            doc_id = f"{current_country}_{english_name_normalized}"
+            
+            logger.info(f"문서명 생성: 사용자현재국가={current_country}, englishName={english_name} -> {doc_id}")
+            
+            # 3. 중복 저장 체크
+            saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(doc_id)
+            existing_doc = saved_food_ref.get()
+            
+            if existing_doc.exists:
+                logger.warning(f"이미 저장된 음식입니다: {doc_id}")
+                # 기존 데이터 반환 (중복 저장 방지)
+                existing_data = existing_doc.to_dict()
+                existing_data['id'] = doc_id
+                return SavedFood(**existing_data)
+            
+            # 4. AI 응답의 data 부분을 그대로 사용
+            food_data = save_request.data.copy()
+            
+            # 5. 저장된 음식 데이터 구성
             saved_food = SavedFood(
-                id=save_request.foodId,
+                id=doc_id,  # 자동 생성된 문서명
                 userImageUrl=save_request.userImageUrl,
-                foodInfo=save_request.foodInfo,
+                foodInfo=FoodInfo(**food_data),  # AI 응답의 data 부분을 그대로 FoodInfo로 변환
                 restaurantName=save_request.restaurantName,
-                savedAt=datetime.now()
+                savedAt=datetime.now(),
+                personalized_info=save_request.personalized_info  # 개인화 정보도 함께 저장
             )
             
-            # Firestore에 저장 (users/{uid}/saved_foods 서브컬렉션)
-            saved_food_ref = self.db.collection('users').document(uid).collection('saved_foods').document(save_request.foodId)
+            # 6. Firestore에 저장 (users/{uid}/saved_foods/{doc_id})
             saved_food_ref.set(saved_food.model_dump())
             
-            # 메타데이터 업데이트 (저장 횟수 증가)
-            await self._update_food_save_count(save_request.foodInfo)
+            # 7. 메타데이터 업데이트 (저장 횟수 증가)
+            await self._update_food_save_count(FoodInfo(**food_data), current_country)
             
-            logger.info(f"음식 저장 완료: 사용자 {uid}, 음식 {save_request.foodId}")
+            logger.info(f"음식 저장 완료: 사용자 {uid}, 음식 {doc_id}")
             return saved_food
             
         except Exception as e:
@@ -308,11 +341,20 @@ class UserService:
     
 
     ############## 여기 로직은 좀 더 고민민
-    async def _update_food_save_count(self, food_info: FoodInfo):
+    async def _update_food_save_count(self, food_info: FoodInfo, target_language: str):
         """음식 저장 시 메타데이터의 저장 횟수 업데이트 (없으면 생성)"""
         try:
-            # 문서명 생성: 나라코드_원어 (foodName 사용)
-            doc_name = f"{food_info.country}_{food_info.foodName}"
+            # 문서명 생성: 타깃언어_영어소문자이름
+            if hasattr(food_info, 'englishName') and food_info.englishName:
+                # englishName이 있는 경우: {target_language}_{normalized_englishName}
+                from app.services.search_service import search_service
+                english_name_normalized = await search_service._normalize_english_name(food_info.englishName)
+                doc_name = f"{target_language}_{english_name_normalized}"
+                logger.info(f"타깃언어 기반 메타데이터 문서명 생성: {target_language}_{english_name_normalized}")
+            else:
+                # englishName이 없는 경우: 기존 방식 (fallback)
+                doc_name = f"{target_language}_{food_info.foodName}"
+                logger.warning(f"englishName 없음, 기존 방식 사용: {doc_name}")
             
             # 메타데이터 참조
             meta_ref = self.db.collection('food_metadata').document(doc_name)
@@ -330,11 +372,12 @@ class UserService:
             else:
                 # 새 문서 생성
                 meta_ref.set({
-                    'country': food_info.country,
+                    'country': food_info.country,  # AI로부터 받은 country (음식의 배경)
                     'foodName': food_info.foodName,
                     'dishName': food_info.dishName,
+                    'englishName': getattr(food_info, 'englishName', ''),  # englishName 추가
                     'saveCount': 1,
-                    'searchCount': 1,  # 검색 횟수도 초기화
+                    'searchCount': 0,  # 검색 횟수는 0으로 초기화 (저장만 한 경우)
                     'createdAt': datetime.now(),
                     'lastSavedAt': datetime.now()
                 })
@@ -345,11 +388,20 @@ class UserService:
             logger.error(f"메타데이터 업데이트 실패: {str(e)}")
             # 에러가 있어도 음식 저장은 계속 진행
     
-    async def increase_search_count(self, food_info: FoodInfo):
+    async def increase_search_count(self, food_info: FoodInfo, target_language: str):
         """음식 검색 시 메타데이터 검색 횟수 증가 (없으면 생성)"""
         try:
-            # 문서명 생성: 나라코드_원어 (foodName 사용)
-            doc_name = f"{food_info.country}_{food_info.foodName}"
+            # 문서명 생성: 타깃언어_영어소문자이름
+            if hasattr(food_info, 'englishName') and food_info.englishName:
+                # englishName이 있는 경우: {target_language}_{normalized_englishName}
+                from app.services.search_service import search_service
+                english_name_normalized = await search_service._normalize_english_name(food_info.englishName)
+                doc_name = f"{target_language}_{english_name_normalized}"
+                logger.info(f"타깃언어 기반 메타데이터 문서명 생성: {target_language}_{english_name_normalized}")
+            else:
+                # englishName이 없는 경우: 기존 방식 (fallback)
+                doc_name = f"{target_language}_{food_info.foodName}"
+                logger.warning(f"englishName 없음, 기존 방식 사용: {doc_name}")
             
             # 메타데이터 참조
             meta_ref = self.db.collection('food_metadata').document(doc_name)
@@ -367,12 +419,13 @@ class UserService:
             else:
                 # 새 문서 생성
                 meta_ref.set({
-                    'country': food_info.country,
+                    'country': food_info.country,  # AI로부터 받은 country (음식의 배경)
                     'foodName': food_info.foodName,
-                    'dishName' : food_info.dishName,
+                    'dishName': food_info.dishName,
+                    'englishName': getattr(food_info, 'englishName', ''),  # englishName 추가
                     'searchCount': 1,
-                    'saveCount': 0,  # 저장 횟수도 초기화
-                    'updatedAt': datetime.now(),
+                    'saveCount': 0,  # 저장 횟수는 0으로 초기화 (검색만 한 경우)
+                    'createdAt': datetime.now(),
                     'lastSearched': datetime.now()
                 })
                 
@@ -380,7 +433,7 @@ class UserService:
             
         except Exception as e:
             logger.error(f"메타데이터 업데이트 실패: {str(e)}")
-            # 에러가 있어도 AI 분석은 계속 진행
+            # 에러가 있어도 음식 검색은 계속 진행
     
     async def delete_saved_foods(self, uid: str, delete_request: DeleteSavedFoodsRequest) -> Dict[str, Any]:
         """
@@ -420,7 +473,8 @@ class UserService:
                         if 'foodInfo' in food_data:
                             try:
                                 food_info = FoodInfo(**food_data['foodInfo'])
-                                await self._decrease_food_save_count(food_info)
+                                # 메타데이터 업데이트 시 타깃언어를 현재 사용자의 현재 국가로 설정
+                                await self._decrease_food_save_count(food_info, food_data.get('country', ''))
                             except Exception as e:
                                 logger.warning(f"메타데이터 업데이트 실패: {str(e)}")
                         

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from .food import FoodInfo
 
@@ -32,18 +32,24 @@ class UserUpdate(BaseModel):
 class SavedFood(BaseModel):
     # 유저 별 저장된 음식 모델 (users/{uid}/saved_foods/*)
     id: str = Field(..., description="음식 ID (예: JP_tonkatsu, KR_bibimbap) - 중복 저장 방지용", example="JP_tonkatsu")
-    userImageUrl: str = Field(..., description="사용자가 업로드한 이미지 URL", example="https://example.com/user_uploaded_image.jpg")
+    userImageUrl: Optional[str] = Field(None, description="사용자가 업로드한 이미지 URL", example="https://example.com/user_uploaded_image.jpg")
     foodInfo: FoodInfo = Field(..., description="AI 분석 결과 음식 상세 정보 - 수정하지 말고 그대로 저장해야 함")
     restaurantName: Optional[str] = Field(None, description="식당 이름 (선택사항)", example="도쿄 돈가스점")
     savedAt: datetime = Field(..., description="음식 저장 시간 (서버에서 자동 설정)", example="2024-01-15T10:30:00")
+    personalized_info: Optional[Dict[str, Any]] = Field(None, description="개인화 정보 (알레르기, 식단제한 등)")
 
 
 class SaveFoodRequest(BaseModel):
-    """음식 저장 요청 모델"""
-    foodId: str = Field(..., description="음식 고유 ID (중복 저장 방지용)", example="JP_tonkatsu")
-    userImageUrl: str = Field(..., description="사용자가 업로드한 음식 이미지 URL", example="https://example.com/user_uploaded_image.jpg")
-    foodInfo: FoodInfo = Field(..., description="AI 분석 결과 음식 정보 (수정하지 말고 그대로 전달)")
-    restaurantName: Optional[str] = Field(None, description="식당 이름 (선택사항)", example="도쿄 돈가스점")
+    """음식 저장 요청 모델 - AI 응답과 호환"""
+    # AI 응답의 data 부분을 그대로 받음
+    data: Dict[str, Any] = Field(..., description="AI 응답의 data 부분")
+    
+    # 추가 정보 (사용자가 입력)
+    userImageUrl: Optional[str] = Field(None, description="사용자 업로드 이미지")
+    restaurantName: Optional[str] = Field(None, description="식당 이름")
+    
+    # 개인화 정보 (AI 응답에서)
+    personalized_info: Optional[Dict[str, Any]] = Field(None, description="개인화 정보")
 
 
 class DeleteSavedFoodsRequest(BaseModel):

@@ -35,9 +35,12 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
         
         logger.info(f"기존 검색 결과 확인 중...")
         # OCR/번역된 원어 음식명으로 기존 결과 검색
+        # country는 타겟 언어의 국가로 설정 (기존 결과 찾기용)
+        target_country = await search_service._get_country_code_from_language(req.target_language) if req.target_language else req.country
+        
         existing_result = await search_service.find_existing_search_result(
             query=req.food_name,  # 원어 음식명
-            country=req.country
+            target_language=req.target_language
         )
         
         if existing_result:
@@ -83,7 +86,9 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
             if personalized_result.get('personalized', {}).get('safe_recommendations'):
                 existing_food_info.recommendations = personalized_result['personalized']['safe_recommendations']
             
-            await user_service.increase_search_count(existing_food_info)
+            # 타겟 언어를 국가 코드로 변환
+            target_country = await search_service._get_country_code_from_language(req.target_language) if req.target_language else "UN"
+            await user_service.increase_search_count(existing_food_info, target_country)
             
             # 4단계: 개인화된 결과 반환
             logger.info(f"기존 결과 + 개인화 완료 (AI 분석 없음)")
@@ -97,11 +102,8 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
         logger.info(f"기존 검색 결과 없음, AI 분석 시작: {req.food_name}")
         data = await analyze_one_async(cons, req)
         
-        # 검색 결과 저장
-        await search_service._save_search_result(uid, req.food_name, f"{data.country}_{data.foodName}", data)
-        
-        # 메타데이터 검색 횟수 증가
-        await user_service.increase_search_count(data)
+        # 검색 결과 저장은 food_analyzer.py에서 처리되므로 여기서는 제거
+        # await search_service._save_search_result(uid, req.food_name, f"{data.country}_{data.foodName}", data, req.target_language)
         
         # 개인화된 정보 생성 (첫 번째 검색에서도)
         personalized_result = await search_service.personalize_search_result(
@@ -113,10 +115,12 @@ async def analyze_one(req: AnalyzeOneRequest, current_user: dict = Depends(get_c
                 'data': {
                     'dishName': data.dishName,
                     'country': data.country,
+                    'englishName': getattr(data, 'englishName', ''),  # englishName 필드 추가
                     'summary': data.summary,
                     'recommendations': data.recommendations,
                     'ingredients': data.ingredients,
                     'allergens': data.allergens,
+                    'dietaryRestrictions': getattr(data, 'dietaryRestrictions', []),  # dietaryRestrictions 필드 추가
                     'imageUrl': data.imageUrl,
                     'imageSource': data.imageSource,
                     'culturalBackground': data.culturalBackground

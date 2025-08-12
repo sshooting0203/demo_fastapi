@@ -58,20 +58,7 @@ async def save_food_to_my_list(
     try:
         uid = current_user["uid"]
         
-        # AI 분석 결과를 더미데이터 형식에 맞게 변환
-        # savedAt은 서버에서 자동 설정
-        from datetime import datetime
-        
-        # SavedFood 모델 생성 (더미데이터 형식과 동일)
-        saved_food = SavedFood(
-            id=save_request.foodId,  # 예: "JP_tonkatsu"
-            userImageUrl=save_request.userImageUrl,
-            foodInfo=save_request.foodInfo,  # AI 분석 결과 그대로 저장
-            restaurantName=save_request.restaurantName,
-            savedAt=datetime.now()  # 현재 시간으로 자동 설정
-        )
-        
-        # user_service를 통해 저장 (메타데이터 업데이트 포함)
+        # user_service를 통해 저장 (문서명 자동 생성, 메타데이터 업데이트 포함)
         saved_food_result = await user_service.save_food(uid, save_request)
         
         # 저장된 음식 반환

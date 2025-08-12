@@ -37,6 +37,9 @@ ALLERGEN_ENUM = [
     'PEANUT','PINE_NUT','PORK','SHELLFISH','SHRIMP','SOY','SQUID',
     'SULFITES','TOMATO','WALNUT','WHEAT'
 ]
+DIETARY_RESTRICTIONS = [
+    'HINDUISM', 'ISLAM', 'VEGAN', 'VEGETARIAN'
+]
 
 logger = logging.getLogger(__name__)
 if not firebase_admin._apps:
@@ -58,6 +61,7 @@ def build_prompt(*, food_name: str, country_hint: str | None,
                  target_lang_code: str, allergies: List[str], religion: str | None) -> str:
     country_enum = ", ".join(COUNTRY_ENUM)
     allergen_enum = ", ".join(ALLERGEN_ENUM)
+    dietary_enum = ", ".join(DIETARY_RESTRICTIONS)
 
     return f"""
     You are analyzing information about a specific dish: "{food_name}".
@@ -65,6 +69,7 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     Language rules (STRICT):
     - The "country" field MUST be in English only (choose from: {country_enum}). If unknown, use "".
     - The "allergens" array MUST be in English only, using only canonical values from: {allergen_enum}. If unknown, use [].
+    - The "dietaryRestrictions" array MUST be in English only, using only canonical values from: {dietary_enum}. If unknown, use [].
     - All other fields (dishName, ingredients, summary, recommendations, culturalBackground) MUST be entirely in {target_lang_code}.
     - Never mix languages inside a single field.
     Schema:
@@ -72,7 +77,8 @@ def build_prompt(*, food_name: str, country_hint: str | None,
     "country": "<{country_enum}> or \"\"",
     "dishName": "<{target_lang_code}>",
     "englishName": "<englishName of dishName>",
-    "ingredients": ["{target_lang_code} 3~5 words"],                
+    "ingredients": ["{target_lang_code} 3~5 words"], 
+    "dietaryRestrictions": ["{dietary_enum}"]             
     "allergens": ["{allergen_enum}"],      
     "summary": "<{target_lang_code} 2 sentences>",
     "recommendations": ["{target_lang_code} ..."],
@@ -98,7 +104,7 @@ def safe_load_json(text: str) -> Dict:
 def validate_and_normalize(obj: Dict) -> Dict:
     required = [
         "country","dishName","ingredients","allergens",
-        "summary","recommendations","culturalBackground", "englishName"
+        "summary","recommendations","culturalBackground", "englishName", "dietaryRestrictions"
     ]
     for k in required:
         if k not in obj:
@@ -118,7 +124,7 @@ def validate_and_normalize(obj: Dict) -> Dict:
     # 배열 필드 정리
     obj["ingredients"] = str_list(obj.get("ingredients"))
     obj["recommendations"] = str_list(obj.get("recommendations"))
-
+    obj["dietaryRestrictions"] = str_list(obj.get("dietaryRestrictions"))
     # country 제약
     raw_country = to_str(obj.get("country"))
     obj["country"] = raw_country if raw_country in COUNTRY_ENUM else ""
@@ -209,6 +215,8 @@ async def analyze_one_async(
     ai_results = {"foodName": item, "imageUrl": first_img_url, "imageSource" : image_source, **data}
     info = FoodInfo.model_validate(ai_results)
     logging.info('[AI] : %s',info)
+    logging.info('[AI] englishName: %s', getattr(info, 'englishName', 'NOT_FOUND'))
+    
     # 검색 결과를 search_results에 저장
     try:
         uid = cons.get("uid")
@@ -229,6 +237,7 @@ async def analyze_one_async(
                     'data': {
                         'dishName': info.dishName,
                         'country': info.country,
+                        'englishName': getattr(info, 'englishName', ''),  # englishName 필드 추가
                         'summary': info.summary,
                         'recommendations': info.recommendations,
                         'ingredients': info.ingredients,
@@ -250,9 +259,13 @@ async def analyze_one_async(
                 uid=uid,
                 query=item,  # 원어 음식명
                 food_id=food_id,
-                food_info=info
+                food_info=info,
+                target_language=req.target_language  # target_language 추가
             )
             logging.info(f"검색 결과 저장 완료: {food_id}")
+            
+            # 메타데이터 검색 횟수 증가
+            await search_service._update_food_search_count(info, req.target_language)
             
             # 개인화 정보 로깅
             personalized_data = personalized_result.get('personalized', {})
