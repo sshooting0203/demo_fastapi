@@ -227,6 +227,7 @@ class SearchService:
         """
         국가별 상위 음식 조회 (food_metadata 기반)
         새로운 문서명 로직: {국가코드}_{englishName} 형태
+        englishName이 같으면 동일한 음식으로 처리하여 합침
         
         Args:
             country (str): 국가 코드 (예: "JP", "KR")
@@ -243,27 +244,48 @@ class SearchService:
                 query = self.db.collection('food_metadata')\
                     .where('country', '==', country)\
                     .order_by('searchCount', direction=firestore.Query.DESCENDING)\
-                    .limit(limit)
+                    .limit(limit * 2)  # 중복 제거를 위해 더 많이 가져옴
                 
                 docs = query.stream()
-                top_foods = []
+                foods_by_english_name = {}  # englishName을 키로 하는 딕셔너리
                 
                 for doc in docs:
                     data = doc.to_dict()
-                    food_data = {
-                        'foodId': doc.id,  # 문서 ID (예: KR_hotpot)
-                        'foodName': data.get('foodName', ''),  # 원어 이름
-                        'dishName': data.get('dishName', ''),  # 번역된 이름
-                        'englishName': data.get('englishName', ''),  # 영어 이름
-                        'searchCount': data.get('searchCount', 0),
-                        'saveCount': data.get('saveCount', 0),
-                        'lastSearched': data.get('lastSearched'),
-                        'country': data.get('country', '')
-                    }
-                    top_foods.append(food_data)
+                    english_name = data.get('englishName', '').lower()
+                    
+                    if english_name:
+                        if english_name not in foods_by_english_name:
+                            # 새로운 englishName인 경우
+                            foods_by_english_name[english_name] = {
+                                'foodId': doc.id,  # 문서 ID (예: KR_hotpot)
+                                'foodName': data.get('foodName', ''),  # 원어 이름
+                                'dishName': data.get('dishName', ''),  # 번역된 이름
+                                'englishName': data.get('englishName', ''),  # 영어 이름
+                                'searchCount': data.get('searchCount', 0),
+                                'saveCount': data.get('saveCount', 0),
+                                'lastSearched': data.get('lastSearched'),
+                                'country': data.get('country', ''),
+                                'documents': [doc.id]  # 해당 englishName을 가진 문서들
+                            }
+                        else:
+                            # 기존 englishName인 경우, 검색/저장 횟수 합치기
+                            existing = foods_by_english_name[english_name]
+                            existing['searchCount'] += data.get('searchCount', 0)
+                            existing['saveCount'] += data.get('saveCount', 0)
+                            existing['documents'].append(doc.id)
+                            
+                            # 더 높은 검색 횟수를 가진 문서의 정보로 업데이트
+                            if data.get('searchCount', 0) > existing.get('searchCount', 0):
+                                existing['foodId'] = doc.id
+                                existing['foodName'] = data.get('foodName', '')
+                                existing['dishName'] = data.get('dishName', '')
+                                existing['lastSearched'] = data.get('lastSearched')
+                
+                # searchCount 기준으로 정렬하고 상위 limit개 선택
+                top_foods = sorted(foods_by_english_name.values(), key=lambda x: x['searchCount'], reverse=True)[:limit]
                 
                 if top_foods:
-                    logger.info(f"인덱스 기반 검색으로 국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료")
+                    logger.info(f"인덱스 기반 검색으로 국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료 (중복 제거됨)")
                     return top_foods
                     
             except Exception as e:
@@ -272,7 +294,7 @@ class SearchService:
             # 2차 시도: 문서명 기반 검색 (폴백)
             logger.info(f"문서명 기반 검색으로 폴백")
             docs = self.db.collection('food_metadata').stream()
-            top_foods = []
+            foods_by_english_name = {}  # englishName을 키로 하는 딕셔너리
             
             for doc in docs:
                 # 문서명에서 국가코드 추출 (예: "KR_hotpot" -> "KR")
@@ -283,23 +305,40 @@ class SearchService:
                     # 해당 국가의 음식인지 확인
                     if doc_country == country:
                         data = doc.to_dict()
-                        food_data = {
-                            'foodId': doc.id,  # 문서 ID (예: KR_hotpot)
-                            'foodName': data.get('foodName', ''),  # 원어 이름
-                            'dishName': data.get('dishName', ''),  # 번역된 이름
-                            'englishName': data.get('englishName', ''),  # 영어 이름
-                            'searchCount': data.get('searchCount', 0),
-                            'saveCount': data.get('saveCount', 0),
-                            'lastSearched': data.get('lastSearched'),
-                            'country': data.get('country', '')
-                        }
-                        top_foods.append(food_data)
+                        english_name = data.get('englishName', '').lower()
+                        
+                        if english_name:
+                            if english_name not in foods_by_english_name:
+                                # 새로운 englishName인 경우
+                                foods_by_english_name[english_name] = {
+                                    'foodId': doc.id,  # 문서 ID (예: KR_hotpot)
+                                    'foodName': data.get('foodName', ''),  # 원어 이름
+                                    'dishName': data.get('dishName', ''),  # 번역된 이름
+                                    'englishName': data.get('englishName', ''),  # 영어 이름
+                                    'searchCount': data.get('searchCount', 0),
+                                    'saveCount': data.get('saveCount', 0),
+                                    'lastSearched': data.get('lastSearched'),
+                                    'country': data.get('country', ''),
+                                    'documents': [doc.id]  # 해당 englishName을 가진 문서들
+                                }
+                            else:
+                                # 기존 englishName인 경우, 검색/저장 횟수 합치기
+                                existing = foods_by_english_name[english_name]
+                                existing['searchCount'] += data.get('searchCount', 0)
+                                existing['saveCount'] += data.get('saveCount', 0)
+                                existing['documents'].append(doc.id)
+                                
+                                # 더 높은 검색 횟수를 가진 문서의 정보로 업데이트
+                                if data.get('searchCount', 0) > existing.get('searchCount', 0):
+                                    existing['foodId'] = doc.id
+                                    existing['foodName'] = data.get('foodName', '')
+                                    existing['dishName'] = data.get('dishName', '')
+                                    existing['lastSearched'] = data.get('lastSearched')
             
             # searchCount 기준으로 정렬하고 상위 limit개 선택
-            top_foods.sort(key=lambda x: x['searchCount'], reverse=True)
-            top_foods = top_foods[:limit]
+            top_foods = sorted(foods_by_english_name.values(), key=lambda x: x['searchCount'], reverse=True)[:limit]
             
-            logger.info(f"문서명 기반 검색으로 국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료")
+            logger.info(f"문서명 기반 검색으로 국가 {country}의 상위 {len(top_foods)}개 음식 조회 완료 (중복 제거됨)")
             return top_foods
             
         except Exception as e:
