@@ -57,7 +57,6 @@ async def ocr_translate(
     except Exception as e:
         logger.exception("OCR failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
-    
     try:
         translated = await translate_async(words, target_language)
     except Exception as e:

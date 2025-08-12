@@ -164,7 +164,11 @@ def detect_menu(image_bytes: bytes):
     lang_counts = Counter()
     words: List[Dict] = []
 
-    fta = resp.full_text_annotation
+    fta = getattr(resp, "full_text_annotation", None)
+    if not fta or not getattr(fta, "pages", None):
+        logging.info("Vision returned no text (no pages)")
+        return [], None
+    
     for page in fta.pages:
         for block in page.blocks:
             for para in block.paragraphs:
@@ -180,8 +184,13 @@ def detect_menu(image_bytes: bytes):
                     xs = [v.x for v in box]; ys = [v.y for v in box]
                     cx = sum(xs) / 4.0; cy = sum(ys) / 4.0
                     h  = (max(ys) - min(ys)) or 1
-                    words.append({"text": txt, "cx": cx, "cy": cy, "h": h})
+                    if txt:  # 빈 문자열은 버리기
+                        words.append({"text": txt, "cx": cx, "cy": cy, "h": h})
 
+    if not words:
+        logging.info("OCR found zero words after parsing")
+        top_lang = (lang_counts.most_common(1)[0][0].upper()) if lang_counts else None
+        return [], top_lang
     top_lang = (lang_counts.most_common(1)[0][0].upper()) if lang_counts else None
     final_words = group_menu_items(words)
     print('words : ', final_words)
