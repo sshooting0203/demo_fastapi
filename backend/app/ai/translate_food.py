@@ -8,7 +8,7 @@ load_dotenv()
 GENAI_API_KEY = os.getenv("GOOGLE_API_KEY")
 SERVICE_ACCOUNT = os.getenv("FIREBASE_CREDENTIALS")
 MODEL_NAME = "gemini-2.5-flash" 
-MAX_TOKENS = 3000
+MAX_TOKENS = 2500
 
 logger = logging.getLogger(__name__)
 client = genai.Client(api_key=GENAI_API_KEY)
