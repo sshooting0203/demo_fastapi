@@ -16,6 +16,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://react-frontend-production-a9c4.up.railway.app",
+        "https://react-frontend-production-a9c4.up.railway.app",
         "https://demofastapi-production.up.railway.app",
     ],  # 프론트 도메인
     allow_credentials=False,
