@@ -10,7 +10,7 @@ from backend.app.models.food import FoodInfo
 
 load_dotenv()
 
-MAX_TOKENS = 2000
+MAX_TOKENS = 3000
 GENAI_API_KEY = os.getenv("GOOGLE_API_KEY")
 SERVICE_ACCOUNT = os.getenv("FIREBASE_CREDENTIALS")
 MODEL_NAME = "gemini-2.5-flash" # "gemini-1.5-pro", "gemini-2.0-pro-exp", "gemini-2.5-flash"
