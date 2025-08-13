@@ -14,7 +14,10 @@ app.include_router(users.router)
 app.include_router(ai.router) 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173/"],  # 프론트 도메인
+    allow_origins=[
+        "https://react-frontend-production-a9c4.up.railway.app",
+        "https://demofastapi-production.up.railway.app",
+    ],  # 프론트 도메인
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
